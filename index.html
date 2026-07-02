@@ -63,6 +63,11 @@
   .list-row input{flex:1;}
   .price-row input:first-child{flex:0.9;}
   .price-row input:last-child{flex:1.1;}
+  .performer-status-icon{
+    width:16px;flex-shrink:0;text-align:center;font-weight:800;font-size:13px;
+    color:transparent;transition:color .15s ease;
+  }
+  .performer-status-icon.is-matched{color:var(--ok);}
   .rowbtns{display:flex;gap:4px;flex-shrink:0;}
   .icon-btn{
     background:#2a2830;border:1px solid #3a3841;color:#e9e6dd;width:24px;height:24px;border-radius:5px;font-size:12px;line-height:1;
@@ -196,28 +201,14 @@
   <div class="form-panel">
 
     <div class="field-group">
-      <h2>保存済みの概要</h2>
-
-      <div class="subsection-title">☁️ Claudeアカウントに保存</div>
-      <select id="savedEventsSelect"><option value="">保存済みの概要を選択…</option></select>
-      <div class="geo-btn-row" style="margin-top:8px;">
-        <button type="button" id="loadEventBtn" class="btn-teal">Claudeから読み込む</button>
-        <button type="button" id="deleteEventBtn" class="btn-outline">Claudeから削除</button>
-      </div>
-      <div class="geo-status" id="savedStatus"></div>
-      <div class="geo-btn-row" style="margin-top:10px;">
-        <button type="button" id="saveEventBtn" class="btn-teal">Claudeに保存（上書き）</button>
-        <button type="button" id="saveAsNewEventBtn" class="btn-outline">Claudeに新規保存</button>
-      </div>
-      <div class="hint">Claudeアカウントに保存されます。どの端末からでも呼び出せます。</div>
-
-      <div class="subsection-title">💻 PC・スマホに保存（ファイル）</div>
+      <h2>保存・読み込み（ローカルファイル）</h2>
       <div class="geo-btn-row">
         <button type="button" id="exportJsonBtn" class="btn-teal">PCに保存（JSON書き出し）</button>
         <button type="button" id="importJsonBtn" class="btn-outline">PCから読み込む（JSON）</button>
         <input type="file" id="importJsonInput" accept="application/json,.json" style="display:none;">
       </div>
-      <div class="hint">お使いの端末にファイルとして保存されます。Claudeアカウントを持たない相手と共有する場合はこちらをお使いください。</div>
+      <div class="geo-status" id="savedStatus"></div>
+      <div class="hint">お使いの端末にファイルとして保存されます。「PCに保存」でJSONファイルを書き出し、次回「PCから読み込む」でそのファイルを選ぶと、入力内容が復元されます。</div>
     </div>
 
     <div class="field-group">
@@ -259,10 +250,6 @@
         <label>会場名<span class="req">*</span></label>
         <input type="text" id="f_venueName" placeholder="例）OSAKA RUIDO">
       </div>
-      <div class="field">
-        <label>都道府県（同名施設の特定用）</label>
-        <select id="f_venueRegion"><option value="">選択してください</option></select>
-      </div>
       <div class="geo-btn-row">
         <button type="button" id="geoSearchBtn">住所を自動入力</button>
         <button type="button" id="saveVenueBtn">この住所を保存</button>
@@ -270,7 +257,7 @@
       <div class="geo-status" id="geoStatus"></div>
       <div class="field">
         <label>住所（登録済みなら自動入力・修正可）</label>
-        <input type="text" id="f_venueAddress" placeholder="会場名+都道府県を入力すると登録済みの住所が自動入力されます">
+        <input type="text" id="f_venueAddress" placeholder="会場名を入力すると登録済みの住所が自動入力されます">
       </div>
       <div id="mapLinkWrap" style="display:none;">
         <a id="mapLinkOnly" href="#" target="_blank">📍 Googleマップで確認</a>
@@ -297,6 +284,7 @@
       <button type="button" class="add-mini-btn" id="addPerformerBtn">＋ 出演者を追加</button>
       <button type="button" class="quick-add" id="autoPerformers">タイムテーブルから自動生成</button>
       <div class="hint">「Krown Krown / ちょこみんと / POLARiS」のように「/」区切りで入力・貼り付けすると、自動的に複数行に分割されます（Enterキーでも分割できます）。</div>
+      <div class="hint">入力欄の左側に緑の✓が付いている出演者は、タイムテーブルにも同じ名前で入力されています（名前が完全一致した場合のみ表示されます）。</div>
     </div>
 
     <div class="field-group">
@@ -431,12 +419,10 @@
 <script>
 (function(){
   const DAYS = ['日','月','火','水','木','金','土'];
-  const PREFECTURES = ["大阪府","兵庫県","北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県","茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県","新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県","三重県","滋賀県","京都府","奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
-
   const SEED_VENUES = {
-    'osaka ruido|大阪府': {address:'〒542-0081 大阪市中央区南船場3丁目10-11 FPG links SHINSAIBASHI B1F'},
-    'glion arena kobe|兵庫県': {address:'兵庫県神戸市中央区新港町2-1'},
-    'tottei park|兵庫県': {address:'兵庫県神戸市中央区新港町2-1'},
+    'osaka ruido': {address:'〒542-0081 大阪市中央区南船場3丁目10-11 FPG links SHINSAIBASHI B1F'},
+    'glion arena kobe': {address:'兵庫県神戸市中央区新港町2-1'},
+    'tottei park': {address:'兵庫県神戸市中央区新港町2-1'},
   };
   let addressBook = Object.assign({}, SEED_VENUES);
 
@@ -497,15 +483,6 @@
   function escapeAttr(str){ return escapeHtml(str); }
   function val(id){ return document.getElementById(id).value.trim(); }
   function rowHasData(r){ return Object.values(r).some(v => v !== '' && v !== false); }
-
-  // ---------- prefecture select ----------
-  const regionSelect = document.getElementById('f_venueRegion');
-  PREFECTURES.forEach(p=>{
-    const opt = document.createElement('option');
-    opt.value = p; opt.textContent = p;
-    regionSelect.appendChild(opt);
-  });
-  regionSelect.value = '大阪府';
 
   // ---------- date / weekday formatting ----------
   function formatDateJP(dateStr){
@@ -638,10 +615,22 @@
   function getGroupArray(group){ return group === 'pre' ? state.preRows : state.rows; }
 
   // ---------- performers list ----------
+  function updatePerformerTimetableIndicators(){
+    const combined = state.preRows.concat(state.rows);
+    const namesInTimetable = new Set(combined.map(r => (r.name||'').trim()).filter(Boolean));
+    document.querySelectorAll('.performer-status-icon').forEach(icon=>{
+      const idx = +icon.dataset.idx;
+      const name = (state.performers[idx] || '').trim();
+      const matched = !!name && namesInTimetable.has(name);
+      icon.classList.toggle('is-matched', matched);
+    });
+  }
+
   function renderPerformersForm(){
     const wrap = document.getElementById('performersList');
     wrap.innerHTML = state.performers.map((p,idx)=>`
       <div class="list-row">
+        <span class="performer-status-icon" data-idx="${idx}" title="タイムテーブルに反映済み">✓</span>
         <input type="text" data-idx="${idx}" class="performer-input" placeholder="出演者名" value="${escapeAttr(p)}">
         <div class="rowbtns">
           <button type="button" class="icon-btn" data-act="up" data-idx="${idx}" title="上へ">↑</button>
@@ -649,6 +638,7 @@
           <button type="button" class="icon-btn danger" data-act="del" data-idx="${idx}" title="削除">✕</button>
         </div>
       </div>`).join('');
+    updatePerformerTimetableIndicators();
     wrap.querySelectorAll('.performer-input').forEach(inp=>{
       inp.addEventListener('input', e=>{
         state.performers[+e.target.dataset.idx] = e.target.value;
@@ -814,7 +804,7 @@
     el.textContent = msg;
     el.className = 'geo-status ' + (type||'');
   }
-  function venueKey(name, pref){ return name.trim().toLowerCase() + '|' + pref; }
+  function venueKey(name){ return name.trim().toLowerCase(); }
 
   async function loadSavedAddressBook(){
     try{
@@ -833,9 +823,8 @@
 
   function lookupVenue(showEmptyMsg){
     const name = val('f_venueName');
-    const pref = regionSelect.value;
     if(!name){ if(showEmptyMsg) setGeoStatus('会場名を入力してください', 'error'); return; }
-    const entry = addressBook[venueKey(name, pref)];
+    const entry = addressBook[venueKey(name)];
     if(entry){
       document.getElementById('f_venueAddress').value = entry.address;
       setGeoStatus('登録済みの住所を自動入力しました。', 'success');
@@ -847,12 +836,11 @@
   }
   async function saveCurrentVenue(){
     const name = val('f_venueName');
-    const pref = regionSelect.value;
     const address = val('f_venueAddress');
     if(!name || !address){ setGeoStatus('会場名と住所の両方を入力してから保存してください', 'error'); return; }
-    addressBook[venueKey(name, pref)] = {address};
+    addressBook[venueKey(name)] = {address};
     await persistAddressBook();
-    setGeoStatus('住所を保存しました。次回から会場名+都道府県で自動入力されます。', 'success');
+    setGeoStatus('住所を保存しました。次回から会場名で自動入力されます。', 'success');
     updateMapLink();
   }
   function updateMapLink(){
@@ -868,7 +856,6 @@
   document.getElementById('geoSearchBtn').addEventListener('click', ()=> lookupVenue(true));
   document.getElementById('saveVenueBtn').addEventListener('click', saveCurrentVenue);
   document.getElementById('f_venueName').addEventListener('blur', ()=> lookupVenue(false));
-  regionSelect.addEventListener('change', ()=> lookupVenue(false));
   document.getElementById('f_venueAddress').addEventListener('input', ()=>{ updateMapLink(); renderPreview(); });
 
   // ---------- rows form (timetable) ----------
@@ -1091,7 +1078,6 @@
     if(!confirm('入力内容をすべてリセットします。よろしいですか？（保存済みの会場住所帳・保存済みイベントは消えません）')) return;
     ['f_title','f_date','f_openTime','f_startTime','f_announce','f_sale','f_venueName','f_venueAddress','f_overview','f_links','f_other']
       .forEach(id=> document.getElementById(id).value = '');
-    regionSelect.value = '大阪府';
     document.getElementById('f_greetingType').value = 'announce';
     document.getElementById('dateWeekdayHint').textContent = '';
     setGeoStatus('', '');
@@ -1102,7 +1088,6 @@
     state.rows = [blankRow()];
     state.row0AutoSync = true;
     state.showOpenRow = true;
-    currentEventId = null;
     setSavedStatus('', '');
     renderPerformersForm();
     renderPricesForm();
@@ -1112,9 +1097,7 @@
     renderPreview();
   });
 
-  // ---------- saved events (multiple, load anytime) ----------
-  let currentEventId = null;
-
+  // ---------- saved event snapshot (used by local JSON export/import) ----------
   function captureCurrentState(){
     return {
       title: val('f_title'),
@@ -1124,7 +1107,6 @@
       announce: document.getElementById('f_announce').value,
       sale: document.getElementById('f_sale').value,
       venueName: val('f_venueName'),
-      venueRegion: regionSelect.value,
       venueAddress: val('f_venueAddress'),
       overview: document.getElementById('f_overview').value,
       links: document.getElementById('f_links').value,
@@ -1148,7 +1130,6 @@
     document.getElementById('f_announce').value = snap.announce || '';
     document.getElementById('f_sale').value = snap.sale || '';
     document.getElementById('f_venueName').value = snap.venueName || '';
-    regionSelect.value = snap.venueRegion || '';
     document.getElementById('f_venueAddress').value = snap.venueAddress || '';
     document.getElementById('f_overview').value = snap.overview || '';
     document.getElementById('f_links').value = snap.links || '';
@@ -1172,85 +1153,11 @@
     renderPreview();
   }
 
-  function genId(){ return 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
   function setSavedStatus(msg, type){
     const el = document.getElementById('savedStatus');
     el.textContent = msg;
     el.className = 'geo-status ' + (type||'');
   }
-  async function loadEventIndex(){
-    try{
-      const res = await window.storage.get('events_index', false);
-      if(res && res.value) return JSON.parse(res.value);
-    }catch(e){ /* none saved yet */ }
-    return [];
-  }
-  async function saveEventIndex(index){
-    try{ await window.storage.set('events_index', JSON.stringify(index), false); }
-    catch(e){ console.error('保存済み一覧の保存に失敗しました', e); }
-  }
-  async function renderSavedEventsSelect(){
-    const index = await loadEventIndex();
-    index.sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
-    const sel = document.getElementById('savedEventsSelect');
-    const prevVal = sel.value;
-    sel.innerHTML = '<option value="">保存済みの概要を選択…</option>' + index.map(e=>{
-      const dateLabel = e.date ? formatDateShortJP(e.date) : '';
-      return `<option value="${escapeAttr(e.id)}">${escapeHtml(e.title || '（無題）')}${dateLabel ? '（'+dateLabel+'）' : ''}</option>`;
-    }).join('');
-    if(index.some(e=>e.id===prevVal)) sel.value = prevVal;
-  }
-  async function saveCurrentEvent(forceNew){
-    const snap = captureCurrentState();
-    const title = snap.title || '（無題）';
-    const id = (!forceNew && currentEventId) ? currentEventId : genId();
-    const index = await loadEventIndex();
-    const entry = {id, title, date: snap.date || '', updatedAt: Date.now()};
-    const existingIdx = index.findIndex(e=>e.id===id);
-    if(existingIdx >= 0) index[existingIdx] = entry; else index.push(entry);
-    try{
-      await window.storage.set('event:' + id, JSON.stringify(snap), false);
-      await saveEventIndex(index);
-      currentEventId = id;
-      setSavedStatus(`「${title}」として保存しました。`, 'success');
-      await renderSavedEventsSelect();
-      document.getElementById('savedEventsSelect').value = id;
-    }catch(e){
-      setSavedStatus('保存に失敗しました: ' + e.message, 'error');
-    }
-  }
-  async function loadSelectedEvent(){
-    const sel = document.getElementById('savedEventsSelect');
-    const id = sel.value;
-    if(!id){ setSavedStatus('読み込む概要を選択してください', 'error'); return; }
-    try{
-      const res = await window.storage.get('event:' + id, false);
-      if(!res || !res.value){ setSavedStatus('データが見つかりませんでした', 'error'); return; }
-      const snap = JSON.parse(res.value);
-      applySnapshot(snap);
-      currentEventId = id;
-      setSavedStatus(`「${snap.title || '（無題）'}」を読み込みました。`, 'success');
-    }catch(e){
-      setSavedStatus('読み込みに失敗しました: ' + e.message, 'error');
-    }
-  }
-  async function deleteSelectedEvent(){
-    const sel = document.getElementById('savedEventsSelect');
-    const id = sel.value;
-    if(!id){ setSavedStatus('削除する概要を選択してください', 'error'); return; }
-    if(!confirm('選択した概要を削除します。よろしいですか？')) return;
-    let index = await loadEventIndex();
-    index = index.filter(e=>e.id !== id);
-    await saveEventIndex(index);
-    try{ await window.storage.delete('event:' + id, false); }catch(e){ /* ignore */ }
-    if(currentEventId === id) currentEventId = null;
-    setSavedStatus('削除しました。', 'success');
-    await renderSavedEventsSelect();
-  }
-  document.getElementById('saveEventBtn').addEventListener('click', ()=> saveCurrentEvent(false));
-  document.getElementById('saveAsNewEventBtn').addEventListener('click', ()=> saveCurrentEvent(true));
-  document.getElementById('loadEventBtn').addEventListener('click', loadSelectedEvent);
-  document.getElementById('deleteEventBtn').addEventListener('click', deleteSelectedEvent);
 
   // ---------- JSON export / import (works without a Claude account) ----------
   function exportEventJSON(){
@@ -1276,7 +1183,6 @@
       try{
         const snap = JSON.parse(e.target.result);
         applySnapshot(snap);
-        currentEventId = null;
         setSavedStatus(`「${snap.title || '（無題）'}」をJSONファイルから読み込みました。`, 'success');
       }catch(err){
         setSavedStatus('読み込みに失敗しました。ファイル形式をご確認ください。', 'error');
@@ -1441,6 +1347,7 @@
 
   function renderPreview(){
     renderOpenRowHint();
+    updatePerformerTimetableIndicators();
 
     document.getElementById('p_title').textContent = val('f_title') || '（タイトル未入力）';
 
