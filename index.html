@@ -281,7 +281,7 @@
       <h2>価格</h2>
       <div id="pricesList"></div>
       <button type="button" class="add-mini-btn" id="addPriceBtn">＋ 価格種別を追加</button>
-      <div class="hint">「前売 / 女性 / 当日」のように「/」区切りで入力しEnterを押すと、自動的に複数行に分割されます（種別欄・金額欄どちらでも使えます）。</div>
+      <div class="hint">「前売 / 女性 / 当日」のように「/」区切りで入力・貼り付けすると、自動的に複数行に分割されます（Enterキーでも分割できます／種別欄・金額欄どちらでも使えます）。</div>
     </div>
 
     <div class="field-group">
@@ -296,7 +296,7 @@
       <div id="performersList"></div>
       <button type="button" class="add-mini-btn" id="addPerformerBtn">＋ 出演者を追加</button>
       <button type="button" class="quick-add" id="autoPerformers">タイムテーブルから自動生成</button>
-      <div class="hint">「Krown Krown / ちょこみんと / POLARiS」のように「/」区切りで入力しEnterを押すと、自動的に複数行に分割されます。</div>
+      <div class="hint">「Krown Krown / ちょこみんと / POLARiS」のように「/」区切りで入力・貼り付けすると、自動的に複数行に分割されます（Enterキーでも分割できます）。</div>
     </div>
 
     <div class="field-group">
@@ -654,17 +654,25 @@
         state.performers[+e.target.dataset.idx] = e.target.value;
         renderPreview();
       });
-      inp.addEventListener('keydown', e=>{
-        if(e.key !== 'Enter') return;
+      const trySplitPerformer = e=>{
+        const idx = +e.target.dataset.idx;
         const value = e.target.value;
         if(!value.includes('/')) return;
-        e.preventDefault();
-        const idx = +e.target.dataset.idx;
         const parts = value.split('/').map(s=>s.trim()).filter(Boolean);
         if(parts.length <= 1) return;
         state.performers.splice(idx, 1, ...parts);
         renderPerformersForm();
         renderPreview();
+      };
+      inp.addEventListener('keydown', e=>{
+        if(e.key !== 'Enter') return;
+        if(!e.target.value.includes('/')) return;
+        e.preventDefault();
+        trySplitPerformer(e);
+      });
+      inp.addEventListener('paste', e=>{
+        // ペースト直後は値の反映前なので、次のイベントループで判定する
+        setTimeout(()=> trySplitPerformer(e), 0);
       });
     });
     wrap.querySelectorAll('button[data-act]').forEach(btn=>{
@@ -720,11 +728,9 @@
           renderPreview();
         });
       }
-      inp.addEventListener('keydown', e=>{
-        if(e.key !== 'Enter') return;
+      const trySplitPrice = e=>{
         const value = e.target.value;
         if(!value.includes('/')) return;
-        e.preventDefault();
         const idx = +e.target.dataset.idx, field = e.target.dataset.field;
         const parts = value.split('/').map(s=>s.trim()).filter(Boolean);
         if(parts.length <= 1) return;
@@ -739,6 +745,15 @@
         state.prices.splice(idx, 1, ...newEntries);
         renderPricesForm();
         renderPreview();
+      };
+      inp.addEventListener('keydown', e=>{
+        if(e.key !== 'Enter') return;
+        if(!e.target.value.includes('/')) return;
+        e.preventDefault();
+        trySplitPrice(e);
+      });
+      inp.addEventListener('paste', e=>{
+        setTimeout(()=> trySplitPrice(e), 0);
       });
     });
     wrap.querySelectorAll('button[data-act]').forEach(btn=>{
