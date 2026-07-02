@@ -10,7 +10,7 @@
   :root{
     --ink:#16151a;
     --ink-soft:#2a2830;
-    --paper:#f7f4ec;
+    --paper:#ffffff;
     --paper-line:#cfc8b8;
     --amber:#e8a33d;
     --amber-deep:#c9822a;
@@ -169,6 +169,17 @@
   table.sheet-table td.name-cell{text-align:left;font-weight:700;font-family:var(--sans);}
   table.sheet-table tr.open-row td{background:rgba(47,93,98,.12);font-weight:700;}
   .empty-note{color:var(--muted);font-size:12px;padding:14px 4px;font-family:var(--sans);}
+
+  /* 列数に応じてPDF幅に収まるよう文字・セルサイズを自動縮小 */
+  #sheet.density-compact .sheet-table{font-size:10px;}
+  #sheet.density-compact .sheet-table th,
+  #sheet.density-compact .sheet-table td{padding:4px 4px;}
+  #sheet.density-tight{padding-left:18px;padding-right:18px;}
+  #sheet.density-tight .sheet-table{font-size:8.3px;}
+  #sheet.density-tight .sheet-table th,
+  #sheet.density-tight .sheet-table td{padding:3px 3px;}
+  #sheet.density-tight .meta-grid{font-size:11px;}
+  #sheet.density-tight .bullets{font-size:10.5px;}
 </style>
 </head>
 <body>
@@ -270,6 +281,7 @@
       <h2>価格</h2>
       <div id="pricesList"></div>
       <button type="button" class="add-mini-btn" id="addPriceBtn">＋ 価格種別を追加</button>
+      <div class="hint">「前売 / 女性 / 当日」のように「/」区切りで入力しEnterを押すと、自動的に複数行に分割されます（種別欄・金額欄どちらでも使えます）。</div>
     </div>
 
     <div class="field-group">
@@ -284,6 +296,7 @@
       <div id="performersList"></div>
       <button type="button" class="add-mini-btn" id="addPerformerBtn">＋ 出演者を追加</button>
       <button type="button" class="quick-add" id="autoPerformers">タイムテーブルから自動生成</button>
+      <div class="hint">「Krown Krown / ちょこみんと / POLARiS」のように「/」区切りで入力しEnterを押すと、自動的に複数行に分割されます。</div>
     </div>
 
     <div class="field-group">
@@ -351,7 +364,7 @@
       </div>
       <button type="button" class="add-row-btn" id="addRowBtn">＋ 行を追加</button>
       <button type="button" class="quick-add" id="addBreakBtn">＋【調整時間】を追加</button>
-      <div class="hint">持ち時間→終了時間、「特典会/出演何分後」「物販/時間(分)」→特典会の開始・終了、「楽屋/入何分前」「楽屋/出何分後」→楽屋の入り・退室時間を、それぞれ自動計算します（分数の入力欄はPDFには出力されません）。</div>
+      <div class="hint">終了時間・特典会終了時間の自動計算は「開始時間」を変更したときだけ行われます（持ち時間・物販/時間(分)だけを後から変更しても、確定済みの終了時間は自動で書き換わりません）。「楽屋/入何分前」「楽屋/出何分後」→楽屋の入り・退室時間は引き続き自動計算します（分数の入力欄はPDFには出力されません）。</div>
       <div class="hint">終了時間を確定（入力欄からフォーカスを外す）すると、次の枠の開始時間に自動的に反映されます。</div>
       <div class="hint">実際の時間差と持ち時間・物販時間の数値が一致しない場合、上に警告が表示されます。</div>
       <div class="hint">楽屋・車両・撮影可否・特典会ブースなどは、すべての行で未入力の場合PDF/プレビューの列ごと非表示になり、他の列が広く表示されます。</div>
@@ -373,10 +386,10 @@
       <textarea id="shareTextArea" readonly></textarea>
       <div class="geo-btn-row" style="margin-top:8px;">
         <button type="button" id="copyShareTextBtn" class="btn-teal" style="margin-top:0;">全文をコピー</button>
-        <button type="button" id="openLineBtn" class="btn-outline">LINEで開く</button>
+        <button type="button" id="openLineBtn" class="btn-outline">LINE(スマホ)で送る</button>
       </div>
       <div class="hint">テキストエリアをクリックすると全選択されます。手動でコピーする場合はCtrl+C（Macは⌘+C）してください。</div>
-      <div class="hint">「LINEで開く」はLINEアプリが入っている端末で、案内文が入力済みの状態でトーク選択画面を開きます。宛先はLINE側で毎回選んで送信してください。</div>
+      <div class="hint">「LINE(スマホ)で送る」はLINEアプリが入っている端末で、案内文が入力済みの状態でトーク選択画面を開きます。宛先はLINE側で毎回選んで送信してください。文字数が多い場合はURLの上限を超えて文字化けするため、自動的に全文をクリップボードにコピーし、LINEには要約のみ入力した状態で開きます。</div>
     </div>
 
     <div class="actions">
@@ -518,7 +531,8 @@
   // ---------- number comma formatting ----------
   function formatNumberComma(str){
     if(!str) return str;
-    return str.replace(/\d+/g, m => Number(m).toLocaleString('en-US'));
+    const stripped = str.replace(/,/g, '');
+    return stripped.replace(/\d+/g, m => Number(m).toLocaleString('en-US'));
   }
 
   // ---------- time helpers ----------
@@ -601,21 +615,18 @@
     }
     return 'after';
   }
+  function merchCategoryLabel(row){
+    if(row.merchCategory) return row.merchCategory;
+    const timing = merchTiming(row);
+    if(timing === 'parallel') return '並行';
+    if(timing === 'before') return '前物販';
+    return '終演後';
+  }
   function composeMerch(row){
     if(!row.meetStart || !row.meetEnd) return '';
     const boothPart = row.meetBooth || '';
-    let label;
-    if(row.merchCategory){
-      // 手動指定があれば自動判定より優先。並行・前物販はブース名を付ける、終演後・中物販は付けない。
-      label = (row.merchCategory === '並行' || row.merchCategory === '前物販')
-        ? (row.merchCategory + boothPart)
-        : row.merchCategory;
-    } else {
-      const timing = merchTiming(row);
-      if(timing === 'parallel') label = '並行' + boothPart;
-      else if(timing === 'before') label = '前物販' + boothPart;
-      else label = '終演後';
-    }
+    const category = merchCategoryLabel(row);
+    const label = (category === '並行' || category === '前物販') ? (category + boothPart) : category;
     return `${row.meetStart}-${row.meetEnd} / ${label}`;
   }
   function updateCellValue(group, idx, field, value){
@@ -641,6 +652,18 @@
     wrap.querySelectorAll('.performer-input').forEach(inp=>{
       inp.addEventListener('input', e=>{
         state.performers[+e.target.dataset.idx] = e.target.value;
+        renderPreview();
+      });
+      inp.addEventListener('keydown', e=>{
+        if(e.key !== 'Enter') return;
+        const value = e.target.value;
+        if(!value.includes('/')) return;
+        e.preventDefault();
+        const idx = +e.target.dataset.idx;
+        const parts = value.split('/').map(s=>s.trim()).filter(Boolean);
+        if(parts.length <= 1) return;
+        state.performers.splice(idx, 1, ...parts);
+        renderPerformersForm();
         renderPreview();
       });
     });
@@ -697,6 +720,26 @@
           renderPreview();
         });
       }
+      inp.addEventListener('keydown', e=>{
+        if(e.key !== 'Enter') return;
+        const value = e.target.value;
+        if(!value.includes('/')) return;
+        e.preventDefault();
+        const idx = +e.target.dataset.idx, field = e.target.dataset.field;
+        const parts = value.split('/').map(s=>s.trim()).filter(Boolean);
+        if(parts.length <= 1) return;
+        const otherField = field === 'label' ? 'amount' : 'label';
+        const originalOther = state.prices[idx][otherField];
+        const newEntries = parts.map((part, i)=>{
+          const entry = {label:'', amount:''};
+          entry[field] = field === 'amount' ? formatNumberComma(part) : part;
+          if(i === 0) entry[otherField] = originalOther;
+          return entry;
+        });
+        state.prices.splice(idx, 1, ...newEntries);
+        renderPricesForm();
+        renderPreview();
+      });
     });
     wrap.querySelectorAll('button[data-act]').forEach(btn=>{
       btn.addEventListener('click', e=>{
@@ -914,7 +957,7 @@
     if(group === 'main' && idx === 0 && field === 'start'){ state.row0AutoSync = false; }
 
     let endMayHaveChanged = false;
-    if(field === 'start' || field === 'duration'){
+    if(field === 'start'){
       recalcEnd(row);
       updateCellValue(group, idx, 'end', row.end);
       recalcMeet(row, field);
@@ -922,22 +965,25 @@
       updateCellValue(group, idx, 'meetEnd', row.meetEnd);
       recalcDressing(row);
       endMayHaveChanged = true;
+    } else if(field === 'duration'){
+      // 持ち時間だけを変更しても終了時間は自動で書き換えない（開始時間の変更時のみ再計算）。矛盾があればアラートで検知する。
     } else if(field === 'end'){
       recalcMeet(row, field);
       updateCellValue(group, idx, 'meetStart', row.meetStart);
       updateCellValue(group, idx, 'meetEnd', row.meetEnd);
       recalcDressing(row);
       endMayHaveChanged = true;
-    } else if(field === 'meetOffsetMin' || field === 'meetDurationMin'){
+    } else if(field === 'meetOffsetMin'){
       recalcMeet(row, field);
       updateCellValue(group, idx, 'meetStart', row.meetStart);
       updateCellValue(group, idx, 'meetEnd', row.meetEnd);
+    } else if(field === 'meetDurationMin'){
+      // 物販時間(分)だけを変更しても特典会終了時間は自動で書き換えない。矛盾があればアラートで検知する。
     } else if(field === 'meetStart'){
       recalcMeet(row, 'meetStart');
       updateCellValue(group, idx, 'meetEnd', row.meetEnd);
     } else if(field === 'meetEnd'){
-      recalcMeet(row, 'meetEnd');
-      updateCellValue(group, idx, 'meetStart', row.meetStart);
+      // 特典会終了時間を直接編集しても特典会開始時間は自動で書き換えない。矛盾があればアラートで検知する。
     } else if(field === 'dressingBeforeMin' || field === 'dressingAfterMin'){
       recalcDressing(row);
     }
@@ -1309,9 +1355,25 @@
     return issues;
   }
 
+  function checkMerchCategoryConsistency(){
+    const issues = [];
+    const combined = state.preRows.concat(state.rows);
+    ['終演後', '中物販'].forEach(category=>{
+      const matches = combined.filter(r => r.meetStart && r.meetEnd && merchCategoryLabel(r) === category);
+      if(matches.length < 2) return;
+      const first = matches[0];
+      const mismatches = matches.filter(r => r.meetStart !== first.meetStart || r.meetEnd !== first.meetEnd);
+      if(mismatches.length){
+        const detail = matches.map((r, i) => `${r.name || `行${i+1}`}(${r.meetStart}-${r.meetEnd})`).join('、');
+        issues.push(`「${category}」の特典会時間が出演者間で揃っていません: ${detail}`);
+      }
+    });
+    return issues;
+  }
+
   function renderConflicts(){
     const box = document.getElementById('conflictWarnings');
-    const issues = checkConflicts().concat(checkTimeContradictions());
+    const issues = checkConflicts().concat(checkTimeContradictions()).concat(checkMerchCategoryConsistency());
     if(issues.length === 0){ box.style.display = 'none'; box.innerHTML = ''; return; }
     box.style.display = 'block';
     box.innerHTML = '<strong>⚠ 確認が必要な項目があります</strong>' + issues.map(c=>escapeHtml(c)).join('<br>');
@@ -1380,8 +1442,8 @@
     if(startT) timeParts.push('START ' + startT);
     if(timeParts.length) meta.push(['時間', timeParts.join(' / ')]);
 
-    const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> `${p.label ? p.label+'：' : ''}${p.amount}`);
-    if(priceLines.length) meta.push(['価格', priceLines.join('\n')]);
+    const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
+    if(priceLines.length) meta.push(['価格', priceLines.join(' / ')]);
 
     const ticketLines = state.tickets.filter(t=>t.url).map(t=>{
       const labelPart = t.label ? escapeHtml(t.label)+': ' : '';
@@ -1420,6 +1482,12 @@
     if(otherText) document.getElementById('p_other').textContent = otherText;
 
     const cols = previewColsList();
+    const sheetEl = document.getElementById('sheet');
+    sheetEl.classList.remove('density-normal','density-compact','density-tight');
+    if(cols.length >= 9) sheetEl.classList.add('density-tight');
+    else if(cols.length >= 7) sheetEl.classList.add('density-compact');
+    else sheetEl.classList.add('density-normal');
+
     document.getElementById('previewHead').innerHTML = cols.map(c=>`<th>${escapeHtml(c.label)}</th>`).join('');
     const displayRows = getDisplayRows();
     if(displayRows.length === 0){
@@ -1489,7 +1557,7 @@
     if(startT) timeParts.push('START ' + startT);
     if(timeParts.length) lines.push(`時間：${timeParts.join(' / ')}`);
 
-    const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> `${p.label ? p.label+'：' : ''}${p.amount}`);
+    const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
     if(priceLines.length) lines.push(`価格：${priceLines.join(' / ')}`);
 
     const announceJP = formatDateTimeShortJP(val('f_announce'));
@@ -1570,9 +1638,24 @@
     }
     setTimeout(()=>{ btn.textContent = orig; }, 1800);
   });
-  document.getElementById('openLineBtn').addEventListener('click', ()=>{
-    const text = document.getElementById('shareTextArea').value;
-    const lineUrl = 'line://msg/text/' + encodeURIComponent(text);
+  document.getElementById('openLineBtn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('openLineBtn');
+    const orig = btn.textContent;
+    const fullText = document.getElementById('shareTextArea').value;
+    // 日本語1文字がURLエンコードで最大9文字に膨れるため、安全側に見て元テキストの長さで判定する
+    const SAFE_LEN = 300;
+    let payload = fullText;
+    if(fullText.length > SAFE_LEN){
+      payload = fullText.slice(0, SAFE_LEN) + '\n\n…続きが長いため省略しました。全文はクリップボードにコピー済みですので貼り付けてください。';
+      try{
+        await navigator.clipboard.writeText(fullText);
+        btn.textContent = '全文コピー済み→LINEで貼付を';
+      }catch(e){
+        btn.textContent = 'コピーに失敗しました';
+      }
+      setTimeout(()=>{ btn.textContent = orig; }, 2500);
+    }
+    const lineUrl = 'line://msg/text/' + encodeURIComponent(payload);
     window.location.href = lineUrl;
   });
 
@@ -1807,7 +1890,7 @@
     }
   }
 
-  // ---------- PDF export ----------
+  // ---------- PDF export (A4 portrait, auto pagination) ----------
   document.getElementById('exportBtn').addEventListener('click', async ()=>{
     const btn = document.getElementById('exportBtn');
     const originalText = btn.textContent;
@@ -1815,13 +1898,41 @@
     btn.textContent = '生成中...';
     try{
       const sheet = document.getElementById('sheet');
-      const canvas = await html2canvas(sheet, {scale:2, backgroundColor:'#f7f4ec', useCORS:true});
-      const imgData = canvas.toDataURL('image/png');
+      const canvas = await html2canvas(sheet, {scale:2, backgroundColor:'#ffffff', useCORS:true});
       const { jsPDF } = window.jspdf;
-      const pdfW = canvas.width * 0.75;
-      const pdfH = canvas.height * 0.75;
-      const pdf = new jsPDF({orientation: pdfW > pdfH ? 'landscape' : 'portrait', unit:'pt', format:[pdfW, pdfH]});
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+
+      // A4サイズ(pt) と余白
+      const PAGE_W = 595.28, PAGE_H = 841.89, MARGIN = 24;
+      const availW = PAGE_W - MARGIN * 2;
+      const availH = PAGE_H - MARGIN * 2;
+
+      // canvas(px) をA4の横幅にぴったり合わせたときの px→pt 変換係数
+      const pxPerPt = canvas.width / availW;
+      const sliceHeightPx = Math.floor(availH * pxPerPt);
+
+      const pdf = new jsPDF({orientation:'portrait', unit:'pt', format:[PAGE_W, PAGE_H]});
+      let y = 0;
+      let pageIndex = 0;
+      while(y < canvas.height){
+        const thisSliceHeightPx = Math.min(sliceHeightPx, canvas.height - y);
+
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = thisSliceHeightPx;
+        const ctx = pageCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        ctx.drawImage(canvas, 0, y, canvas.width, thisSliceHeightPx, 0, 0, canvas.width, thisSliceHeightPx);
+
+        const imgData = pageCanvas.toDataURL('image/png');
+        const imgHpt = thisSliceHeightPx / pxPerPt;
+        if(pageIndex > 0) pdf.addPage([PAGE_W, PAGE_H], 'portrait');
+        pdf.addImage(imgData, 'PNG', MARGIN, MARGIN, availW, imgHpt);
+
+        y += thisSliceHeightPx;
+        pageIndex++;
+      }
+
       const title = val('f_title') || '概要書';
       const dateStr = document.getElementById('f_date').value;
       const filename = dateStr ? `${dateStr}_${title}.pdf` : `${title}.pdf`;
