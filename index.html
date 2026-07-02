@@ -63,11 +63,9 @@
   .list-row input{flex:1;}
   .price-row input:first-child{flex:0.9;}
   .price-row input:last-child{flex:1.1;}
-  .performer-status-icon{
-    width:16px;flex-shrink:0;text-align:center;font-weight:800;font-size:13px;
-    color:transparent;transition:color .15s ease;
+  .performer-input.is-matched{
+    background:rgba(63,125,79,.22);border-color:var(--ok);color:#eafff0;
   }
-  .performer-status-icon.is-matched{color:var(--ok);}
   .rowbtns{display:flex;gap:4px;flex-shrink:0;}
   .icon-btn{
     background:#2a2830;border:1px solid #3a3841;color:#e9e6dd;width:24px;height:24px;border-radius:5px;font-size:12px;line-height:1;
@@ -284,7 +282,7 @@
       <button type="button" class="add-mini-btn" id="addPerformerBtn">＋ 出演者を追加</button>
       <button type="button" class="quick-add" id="autoPerformers">タイムテーブルから自動生成</button>
       <div class="hint">「Krown Krown / ちょこみんと / POLARiS」のように「/」区切りで入力・貼り付けすると、自動的に複数行に分割されます（Enterキーでも分割できます）。</div>
-      <div class="hint">入力欄の左側に緑の✓が付いている出演者は、タイムテーブルにも同じ名前で入力されています（名前が完全一致した場合のみ表示されます）。</div>
+      <div class="hint">入力欄が緑色にハイライトされている出演者は、タイムテーブルにも同じ名前で入力されています（名前が完全一致した場合のみハイライトされます）。</div>
     </div>
 
     <div class="field-group">
@@ -323,6 +321,44 @@
         <label>その他備考（物販手数料など）</label>
         <textarea id="f_other" placeholder="【物販手数料】単日出演:5,000円／日 ..."></textarea>
       </div>
+    </div>
+
+    <div class="field-group">
+      <h2>🪄 自動タイムテーブル生成</h2>
+      <div class="hint">開場・開演時間（基本情報欄で入力済みのもの）と、主催入り時刻をもとに、組数を自動計算してタイムテーブルを一括生成します。完全撤収は「最終物販終了の40分後」で固定計算されます。</div>
+      <div class="row2">
+        <div class="field">
+          <label>会場レンタル総時間（時間）</label>
+          <input type="text" id="autoGenRentalHours" placeholder="例）5">
+        </div>
+        <div class="field">
+          <label>主催入り時刻</label>
+          <input type="time" id="autoGenEntryTime">
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>リハ時間（分）</label>
+          <input type="text" id="autoGenRehearsalMin" placeholder="例）45">
+        </div>
+        <div class="field">
+          <label>1組あたりの持ち時間（分）</label>
+          <input type="text" id="autoGenPerformMin" placeholder="例）20">
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>物販持ち時間（分）</label>
+          <input type="text" id="autoGenMerchMin" placeholder="例）60">
+        </div>
+        <div class="field">
+          <label>物販/出演何分後（分）</label>
+          <input type="text" id="autoGenMerchOffsetMin" placeholder="例）15">
+        </div>
+      </div>
+      <button type="button" class="add-row-btn" id="autoGenerateBtn">この内容でタイムテーブルを自動生成</button>
+      <div class="geo-status" id="autoGenStatus"></div>
+      <div class="hint">生成されるのは開始・終了・持ち時間・物販時間・楽屋前後の枠のみです。アーティスト名・マイク本数・車両・楽屋番号・撮影可否・備考などは生成後にこちらで手入力してください。既存のタイムテーブルは上書きされます。</div>
     </div>
 
     <div class="field-group">
@@ -374,10 +410,8 @@
       <textarea id="shareTextArea" readonly></textarea>
       <div class="geo-btn-row" style="margin-top:8px;">
         <button type="button" id="copyShareTextBtn" class="btn-teal" style="margin-top:0;">全文をコピー</button>
-        <button type="button" id="openLineBtn" class="btn-outline">LINE(スマホ)で送る</button>
       </div>
       <div class="hint">テキストエリアをクリックすると全選択されます。手動でコピーする場合はCtrl+C（Macは⌘+C）してください。</div>
-      <div class="hint">「LINE(スマホ)で送る」はLINEアプリが入っている端末で、案内文が入力済みの状態でトーク選択画面を開きます。宛先はLINE側で毎回選んで送信してください。文字数が多い場合はURLの上限を超えて文字化けするため、自動的に全文をクリップボードにコピーし、LINEには要約のみ入力した状態で開きます。</div>
     </div>
 
     <div class="actions">
@@ -618,11 +652,12 @@
   function updatePerformerTimetableIndicators(){
     const combined = state.preRows.concat(state.rows);
     const namesInTimetable = new Set(combined.map(r => (r.name||'').trim()).filter(Boolean));
-    document.querySelectorAll('.performer-status-icon').forEach(icon=>{
-      const idx = +icon.dataset.idx;
+    document.querySelectorAll('.performer-input').forEach(inp=>{
+      const idx = +inp.dataset.idx;
       const name = (state.performers[idx] || '').trim();
       const matched = !!name && namesInTimetable.has(name);
-      icon.classList.toggle('is-matched', matched);
+      inp.classList.toggle('is-matched', matched);
+      inp.title = matched ? 'タイムテーブルに反映済み' : '';
     });
   }
 
@@ -630,7 +665,6 @@
     const wrap = document.getElementById('performersList');
     wrap.innerHTML = state.performers.map((p,idx)=>`
       <div class="list-row">
-        <span class="performer-status-icon" data-idx="${idx}" title="タイムテーブルに反映済み">✓</span>
         <input type="text" data-idx="${idx}" class="performer-input" placeholder="出演者名" value="${escapeAttr(p)}">
         <div class="rowbtns">
           <button type="button" class="icon-btn" data-act="up" data-idx="${idx}" title="上へ">↑</button>
@@ -1068,6 +1102,114 @@
   document.getElementById('f_startTime').addEventListener('input', ()=>{ syncRow0Start(); renderPreview(); });
   document.getElementById('f_openTime').addEventListener('input', renderPreview);
 
+  // ---------- auto timetable generator ----------
+  function setAutoGenStatus(msg, type){
+    const el = document.getElementById('autoGenStatus');
+    el.textContent = msg;
+    el.className = 'geo-status ' + (type||'');
+  }
+  function generateAutoTimetable(){
+    const openT = document.getElementById('f_openTime').value;
+    const startT = document.getElementById('f_startTime').value;
+    const entryT = document.getElementById('autoGenEntryTime').value;
+    if(!openT || !startT){
+      setAutoGenStatus('先に基本情報の「開場時間」「開演時間」を入力してください。', 'error');
+      return;
+    }
+    if(!entryT){
+      setAutoGenStatus('「主催入り時刻」を入力してください。', 'error');
+      return;
+    }
+    const rentalHours = parseFloat(document.getElementById('autoGenRentalHours').value);
+    const rehearsalMin = parseInt(document.getElementById('autoGenRehearsalMin').value, 10);
+    const performMin = parseInt(document.getElementById('autoGenPerformMin').value, 10);
+    const merchMin = parseInt(document.getElementById('autoGenMerchMin').value, 10);
+    const merchOffsetMin = parseInt(document.getElementById('autoGenMerchOffsetMin').value, 10);
+    const values = {rentalHours, rehearsalMin, performMin, merchMin, merchOffsetMin};
+    for(const k in values){
+      if(isNaN(values[k]) || values[k] < 0){
+        setAutoGenStatus('すべての項目に0以上の数値を入力してください。', 'error');
+        return;
+      }
+    }
+    const rentalMin = Math.round(rentalHours * 60);
+
+    const openMin = timeToMinutes(openT);
+    const startMin = timeToMinutes(startT);
+    const entryMin = timeToMinutes(entryT);
+    if(openMin == null || startMin == null || entryMin == null){
+      setAutoGenStatus('開場・開演・主催入りの時刻形式を確認してください。', 'error');
+      return;
+    }
+
+    const rehearsalStartMin = openMin - rehearsalMin;
+    if(entryMin > rehearsalStartMin){
+      setAutoGenStatus('主催入り時刻が遅すぎます。リハ時間を確保できません（リハ開始予定：' + minutesToTime(rehearsalStartMin) + '）。', 'error');
+      return;
+    }
+
+    const rentalStartMin = entryMin;
+    const rentalEndMin = rentalStartMin + rentalMin;
+    const lastMerchDeadline = rentalEndMin - 40; // 完全撤収は最終物販終了の40分後、固定ルール
+
+    const N = Math.floor((lastMerchDeadline - startMin - merchOffsetMin - merchMin) / performMin);
+    if(N < 1){
+      setAutoGenStatus('条件を満たす組数が1組も確保できません。時間・持ち時間の数値を見直してください。', 'error');
+      return;
+    }
+
+    if(!confirm(`${N}組でタイムテーブルを自動生成します。既存のタイムテーブル（開場前・OPEN以降）は上書きされます。よろしいですか？`)) return;
+
+    // 開場前（主催入り・リハ）
+    const entryRow = blankRow();
+    entryRow.name = '主催入り';
+    entryRow.start = minutesToTime(entryMin);
+    entryRow.end = minutesToTime(rehearsalStartMin);
+    entryRow.duration = String(rehearsalStartMin - entryMin);
+
+    const rehearsalRow = blankRow();
+    rehearsalRow.name = 'リハーサル';
+    rehearsalRow.start = minutesToTime(rehearsalStartMin);
+    rehearsalRow.end = minutesToTime(openMin);
+    rehearsalRow.duration = String(rehearsalMin);
+
+    state.preRows = [entryRow, rehearsalRow];
+
+    // OPEN以降：バックトゥバックで組数分生成、物販は並行方式で自動計算
+    const boothLetters = ['A','B','C'];
+    const newRows = [];
+    let lastMerchEndActual = null;
+    for(let i=0; i<N; i++){
+      const row = blankRow();
+      const s = startMin + i*performMin;
+      row.start = minutesToTime(s);
+      row.duration = String(performMin);
+      recalcEnd(row);
+      row.meetOffsetMin = String(merchOffsetMin);
+      row.meetDurationMin = String(merchMin);
+      row.meetBooth = boothLetters[i % boothLetters.length];
+      recalcMeet(row, 'meetOffsetMin');
+      newRows.push(row);
+      lastMerchEndActual = timeToMinutes(row.meetEnd);
+    }
+    state.rows = newRows;
+
+    // 完全撤収マーカー行（実際の最終物販終了+40分）
+    const teardownRow = blankRow();
+    teardownRow.name = '完全撤収';
+    teardownRow.start = minutesToTime((lastMerchEndActual != null ? lastMerchEndActual : lastMerchDeadline) + 40);
+    state.rows.push(teardownRow);
+
+    state.row0AutoSync = false;
+
+    renderRowsForm();
+    renderPreview();
+
+    const teardownDisplay = teardownRow.start;
+    setAutoGenStatus(`${N}組で生成しました。開演${startT}〜最終物販終了${minutesToTime(lastMerchEndActual)}、完全撤収予定${teardownDisplay}。アーティスト名・マイク本数などは各行に入力してください。`, 'success');
+  }
+  document.getElementById('autoGenerateBtn').addEventListener('click', generateAutoTimetable);
+
   // ---------- other header fields ----------
   ['f_title','f_announce','f_sale','f_overview','f_links','f_other']
     .forEach(id=> document.getElementById(id).addEventListener('input', renderPreview));
@@ -1339,7 +1481,7 @@
     if(!name) return '';
     let html = escapeHtml(name);
     if(address){
-      html += '\n' + escapeHtml(address);
+      html += ' / ' + escapeHtml(address);
       html += '\n<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address) + '" target="_blank">📍 Googleマップで確認</a>';
     }
     return html;
@@ -1559,26 +1701,6 @@
       }
     }
     setTimeout(()=>{ btn.textContent = orig; }, 1800);
-  });
-  document.getElementById('openLineBtn').addEventListener('click', async ()=>{
-    const btn = document.getElementById('openLineBtn');
-    const orig = btn.textContent;
-    const fullText = document.getElementById('shareTextArea').value;
-    // 日本語1文字がURLエンコードで最大9文字に膨れるため、安全側に見て元テキストの長さで判定する
-    const SAFE_LEN = 300;
-    let payload = fullText;
-    if(fullText.length > SAFE_LEN){
-      payload = fullText.slice(0, SAFE_LEN) + '\n\n…続きが長いため省略しました。全文はクリップボードにコピー済みですので貼り付けてください。';
-      try{
-        await navigator.clipboard.writeText(fullText);
-        btn.textContent = '全文コピー済み→LINEで貼付を';
-      }catch(e){
-        btn.textContent = 'コピーに失敗しました';
-      }
-      setTimeout(()=>{ btn.textContent = orig; }, 2500);
-    }
-    const lineUrl = 'line://msg/text/' + encodeURIComponent(payload);
-    window.location.href = lineUrl;
   });
 
   // ---------- artist photo auto-sort (Chrome/Edge desktop only) ----------
