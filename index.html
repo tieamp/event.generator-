@@ -1,0 +1,1851 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>概要書ジェネレーター</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#16151a;
+    --ink-soft:#2a2830;
+    --paper:#f7f4ec;
+    --paper-line:#cfc8b8;
+    --amber:#e8a33d;
+    --amber-deep:#c9822a;
+    --teal:#2f5d62;
+    --danger:#b1462f;
+    --ok:#3f7d4f;
+    --muted:#7a7566;
+    --mono: ui-monospace, "SF Mono", "Roboto Mono", "Courier New", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:var(--sans);background:var(--ink);color:var(--ink);-webkit-font-smoothing:antialiased;}
+  button{font-family:inherit;cursor:pointer;}
+  input, textarea, select{font-family:inherit;}
+  input:focus, textarea:focus, select:focus, button:focus-visible{outline:2px solid var(--amber);outline-offset:1px;}
+
+  .topbar{
+    background:var(--ink);color:var(--paper);padding:18px 24px;
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;
+    border-bottom:3px solid var(--amber);
+  }
+  .brand-eyebrow{display:block;font-size:11px;letter-spacing:.18em;color:var(--amber);font-weight:800;margin-bottom:2px;}
+  .brand h1{margin:0;font-size:20px;letter-spacing:.02em;font-weight:800;}
+
+  .layout{display:grid;grid-template-columns:minmax(360px, 480px) 1fr;gap:0;min-height:calc(100vh - 68px);}
+  @media (max-width:980px){.layout{grid-template-columns:1fr;}}
+
+  .form-panel{background:#1c1b21;color:#e9e6dd;padding:22px;overflow-y:auto;max-height:calc(100vh - 68px);}
+  .preview-panel{background:#0f0e12;padding:28px;overflow:auto;display:flex;justify-content:center;align-items:flex-start;}
+
+  .field-group{margin-bottom:18px;}
+  .field-group h2{
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);font-weight:800;
+    margin:0 0 10px;padding-bottom:6px;border-bottom:1px dashed rgba(255,255,255,.18);
+  }
+  .subsection-title{font-size:10.5px;letter-spacing:.06em;color:#b9b4a6;font-weight:700;margin:14px 0 6px;text-transform:uppercase;}
+  label{display:block;font-size:12px;color:#b9b4a6;margin-bottom:4px;font-weight:600;}
+  label .req{color:var(--danger);margin-left:3px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .field{margin-bottom:10px;}
+  input[type=text], input[type=time], input[type=date], input[type=datetime-local], textarea, select{
+    width:100%;background:#100f13;border:1px solid #3a3841;color:#f2efe6;padding:8px 9px;border-radius:6px;font-size:13px;
+  }
+  select{appearance:auto;}
+  textarea{resize:vertical;min-height:56px;line-height:1.5;}
+  .hint{font-size:11px;color:var(--muted);margin-top:3px;}
+  .weekday-hint{font-size:11.5px;color:var(--amber);margin-top:3px;min-height:14px;}
+
+  .list-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
+  .list-row input{flex:1;}
+  .price-row input:first-child{flex:0.9;}
+  .price-row input:last-child{flex:1.1;}
+  .rowbtns{display:flex;gap:4px;flex-shrink:0;}
+  .icon-btn{
+    background:#2a2830;border:1px solid #3a3841;color:#e9e6dd;width:24px;height:24px;border-radius:5px;font-size:12px;line-height:1;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .icon-btn:hover{background:var(--amber);color:var(--ink);border-color:var(--amber);}
+  .icon-btn.danger:hover{background:var(--danger);color:#fff;border-color:var(--danger);}
+  .add-mini-btn{
+    margin-top:2px;background:transparent;border:1px dashed var(--amber);color:var(--amber);
+    padding:7px 10px;border-radius:6px;font-size:12px;font-weight:700;width:100%;
+  }
+  .add-mini-btn:hover{background:rgba(232,163,61,.1);}
+
+  .geo-btn-row{display:flex;gap:8px;margin-top:8px;}
+  #geoSearchBtn{
+    flex:1;background:var(--teal);color:#fff;border:none;padding:8px 10px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap;
+  }
+  #geoSearchBtn:hover{background:#3d787e;}
+  #saveVenueBtn{
+    flex:1;background:transparent;border:1px solid #3a3841;color:#b9b4a6;padding:8px 10px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap;
+  }
+  #saveVenueBtn:hover{border-color:var(--amber);color:var(--amber);}
+  .geo-status{font-size:11.5px;margin-top:6px;min-height:14px;}
+  .geo-status.info{color:var(--muted);}
+  .geo-status.success{color:var(--ok);}
+  .geo-status.error{color:var(--danger);}
+  #mapLinkWrap{margin-top:8px;}
+  #mapLinkWrap a{font-size:12px;color:var(--amber);text-decoration:none;border:1px solid #3a3841;padding:6px 10px;border-radius:6px;display:inline-block;}
+  #mapLinkWrap a:hover{border-color:var(--amber);}
+
+  .btn-teal{flex:1;background:var(--teal);color:#fff;border:none;padding:8px 10px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap;}
+  .btn-teal:hover{background:#3d787e;}
+  .btn-outline{flex:1;background:transparent;border:1px solid #3a3841;color:#b9b4a6;padding:8px 10px;border-radius:6px;font-size:12px;font-weight:700;white-space:nowrap;}
+  .btn-outline:hover{border-color:var(--amber);color:var(--amber);}
+
+  .conflict-box{
+    background:rgba(177,70,47,.15);border:1px solid var(--danger);color:#ffb9a8;
+    padding:10px 12px;border-radius:8px;font-size:12px;margin-bottom:10px;line-height:1.7;display:none;
+  }
+  .conflict-box strong{color:#ff8f77;display:block;margin-bottom:2px;}
+
+  .open-hint-box{
+    background:rgba(232,163,61,.1);border:1px solid var(--amber);color:#f0cf9a;
+    padding:8px 10px;border-radius:8px;font-size:11.5px;margin:8px 0 12px;line-height:1.5;
+  }
+
+  .photo-report-row{padding:4px 0;border-bottom:1px solid #26242b;}
+  .photo-report-row.not-found{color:#ffb9a8;}
+
+  .rows-table-wrap{overflow-x:auto;border:1px solid #3a3841;border-radius:8px;}
+  table.rows-edit{border-collapse:collapse;width:100%;font-size:12px;}
+  table.rows-edit th{
+    background:#100f13;color:var(--amber);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;
+    padding:7px 6px;text-align:left;white-space:nowrap;border-bottom:1px solid #3a3841;
+  }
+  table.rows-edit td{padding:5px 6px;border-bottom:1px solid #26242b;vertical-align:middle;}
+  table.rows-edit input[type=text], table.rows-edit input[type=time], table.rows-edit input[type=number]{
+    width:78px;min-width:64px;padding:6px 7px;font-size:12px;
+  }
+  table.rows-edit input.name-input{width:150px;}
+  table.rows-edit input.wide{width:110px;}
+  table.rows-edit input.narrow{width:56px;}
+  input[type=checkbox]{width:16px;height:16px;}
+
+  .add-row-btn{
+    margin-top:10px;background:transparent;border:1px dashed var(--amber);color:var(--amber);
+    padding:9px 12px;border-radius:6px;font-size:12.5px;font-weight:700;width:100%;
+  }
+  .add-row-btn:hover{background:rgba(232,163,61,.1);}
+  .quick-add{margin-top:6px;background:transparent;border:1px solid #3a3841;color:#b9b4a6;padding:6px 10px;border-radius:6px;font-size:11.5px;}
+
+  #shareTextArea{
+    width:100%;min-height:280px;background:#100f13;border:1px solid #3a3841;color:#f2efe6;
+    padding:10px;border-radius:6px;font-size:11.5px;line-height:1.6;font-family:var(--mono);resize:vertical;
+  }
+
+  .actions{display:flex;gap:10px;margin-top:22px;position:sticky;bottom:0;background:#1c1b21;padding-top:10px;}
+  #exportBtn{flex:1;background:var(--amber);color:var(--ink);border:none;padding:13px;font-weight:800;font-size:13.5px;border-radius:8px;letter-spacing:.03em;}
+  #exportBtn:hover{background:var(--amber-deep);}
+  #exportBtn:disabled{opacity:.6;cursor:wait;}
+  .btn-ghost{background:transparent;border:1px solid #3a3841;color:#b9b4a6;padding:13px 14px;border-radius:8px;font-size:13px;}
+  .btn-ghost:hover{border-color:var(--danger);color:var(--danger);}
+
+  /* ===== Preview sheet (compact) ===== */
+  .sheet{width:1080px;max-width:100%;background:var(--paper);color:var(--ink);padding:24px 32px 30px;position:relative;box-shadow:0 30px 60px rgba(0,0,0,.5);border:1px solid #e3ddc9;}
+  .sheet-header{display:flex;align-items:baseline;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1.5px solid var(--ink);flex-wrap:wrap;}
+  .sheet-title{font-size:15px;font-weight:800;margin:0;line-height:1.3;}
+
+  .meta-grid{display:grid;grid-template-columns:88px 1fr;row-gap:4px;column-gap:8px;font-size:12px;margin-bottom:12px;}
+  .meta-grid dt{color:var(--teal);font-weight:800;font-size:10.5px;letter-spacing:.03em;padding-top:1px;}
+  .meta-grid dd{margin:0;white-space:pre-wrap;line-height:1.4;}
+  .meta-grid a{color:var(--amber-deep);font-weight:700;}
+
+  .sheet-section{margin:10px 0;}
+  .sheet-section h3{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#fff;background:var(--ink);display:inline-block;padding:2px 8px;border-radius:3px;margin:0 0 5px;}
+  .bullets{margin:0;padding-left:0;list-style:none;font-size:11.5px;line-height:1.5;}
+  .bullets li{padding-left:1.1em;text-indent:-1.1em;}
+  .bullets li::before{content:"●  ";color:var(--amber-deep);}
+
+  table.sheet-table{width:100%;border-collapse:collapse;margin-top:6px;font-family:var(--mono);font-size:12px;table-layout:auto;}
+  table.sheet-table th{background:var(--ink);color:var(--paper);padding:7px 6px;text-align:center;font-weight:700;white-space:nowrap;border:1px solid var(--ink);}
+  table.sheet-table td{padding:7px 6px;text-align:center;border:1px solid var(--paper-line);white-space:nowrap;}
+  table.sheet-table tr:nth-child(even) td{background:rgba(0,0,0,.025);}
+  table.sheet-table td.name-cell{text-align:left;font-weight:700;font-family:var(--sans);}
+  table.sheet-table tr.open-row td{background:rgba(47,93,98,.12);font-weight:700;}
+  .empty-note{color:var(--muted);font-size:12px;padding:14px 4px;font-family:var(--sans);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
+    <h1>概要書ジェネレーター</h1>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- ========== FORM PANEL ========== -->
+  <div class="form-panel">
+
+    <div class="field-group">
+      <h2>保存済みの概要</h2>
+
+      <div class="subsection-title">☁️ Claudeアカウントに保存</div>
+      <select id="savedEventsSelect"><option value="">保存済みの概要を選択…</option></select>
+      <div class="geo-btn-row" style="margin-top:8px;">
+        <button type="button" id="loadEventBtn" class="btn-teal">Claudeから読み込む</button>
+        <button type="button" id="deleteEventBtn" class="btn-outline">Claudeから削除</button>
+      </div>
+      <div class="geo-status" id="savedStatus"></div>
+      <div class="geo-btn-row" style="margin-top:10px;">
+        <button type="button" id="saveEventBtn" class="btn-teal">Claudeに保存（上書き）</button>
+        <button type="button" id="saveAsNewEventBtn" class="btn-outline">Claudeに新規保存</button>
+      </div>
+      <div class="hint">Claudeアカウントに保存されます。どの端末からでも呼び出せます。</div>
+
+      <div class="subsection-title">💻 PC・スマホに保存（ファイル）</div>
+      <div class="geo-btn-row">
+        <button type="button" id="exportJsonBtn" class="btn-teal">PCに保存（JSON書き出し）</button>
+        <button type="button" id="importJsonBtn" class="btn-outline">PCから読み込む（JSON）</button>
+        <input type="file" id="importJsonInput" accept="application/json,.json" style="display:none;">
+      </div>
+      <div class="hint">お使いの端末にファイルとして保存されます。Claudeアカウントを持たない相手と共有する場合はこちらをお使いください。</div>
+    </div>
+
+    <div class="field-group">
+      <h2>基本情報</h2>
+      <div class="field">
+        <label>タイトル<span class="req">*</span></label>
+        <input type="text" id="f_title" placeholder="例）KOBE DRIVE LIVE Day1">
+      </div>
+      <div class="field">
+        <label>日程<span class="req">*</span></label>
+        <input type="date" id="f_date">
+        <div class="weekday-hint" id="dateWeekdayHint"></div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>開場時間</label>
+          <input type="time" id="f_openTime">
+        </div>
+        <div class="field">
+          <label>開演時間</label>
+          <input type="time" id="f_startTime">
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>告知解禁</label>
+          <input type="datetime-local" id="f_announce">
+        </div>
+        <div class="field">
+          <label>販売開始</label>
+          <input type="datetime-local" id="f_sale">
+        </div>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <h2>会場</h2>
+      <div class="field">
+        <label>会場名<span class="req">*</span></label>
+        <input type="text" id="f_venueName" placeholder="例）OSAKA RUIDO">
+      </div>
+      <div class="field">
+        <label>都道府県（同名施設の特定用）</label>
+        <select id="f_venueRegion"><option value="">選択してください</option></select>
+      </div>
+      <div class="geo-btn-row">
+        <button type="button" id="geoSearchBtn">住所を自動入力</button>
+        <button type="button" id="saveVenueBtn">この住所を保存</button>
+      </div>
+      <div class="geo-status" id="geoStatus"></div>
+      <div class="field">
+        <label>住所（登録済みなら自動入力・修正可）</label>
+        <input type="text" id="f_venueAddress" placeholder="会場名+都道府県を入力すると登録済みの住所が自動入力されます">
+      </div>
+      <div id="mapLinkWrap" style="display:none;">
+        <a id="mapLinkOnly" href="#" target="_blank">📍 Googleマップで確認</a>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <h2>価格</h2>
+      <div id="pricesList"></div>
+      <button type="button" class="add-mini-btn" id="addPriceBtn">＋ 価格種別を追加</button>
+    </div>
+
+    <div class="field-group">
+      <h2>チケットURL</h2>
+      <div id="ticketsList"></div>
+      <button type="button" class="add-mini-btn" id="addTicketBtn">＋ チケットURLを追加</button>
+      <div class="hint">2部制などURLが複数ある場合は「ラベル」に①②等を入力してください</div>
+    </div>
+
+    <div class="field-group">
+      <h2>出演者</h2>
+      <div id="performersList"></div>
+      <button type="button" class="add-mini-btn" id="addPerformerBtn">＋ 出演者を追加</button>
+      <button type="button" class="quick-add" id="autoPerformers">タイムテーブルから自動生成</button>
+    </div>
+
+    <div class="field-group">
+      <h2>アーティスト写真の自動仕分け</h2>
+      <div id="photoSortUnsupported" class="hint" style="display:none;color:var(--danger);">
+        お使いのブラウザはこの機能に対応していません。PC版のChromeまたはEdgeでお試しください（Safari・Firefox・iPhone/iPadでは動作しません）。
+      </div>
+      <div id="photoSortControls">
+        <div class="geo-btn-row">
+          <button type="button" id="pickSourceFolderBtn" class="btn-teal">①写真フォルダを選択</button>
+        </div>
+        <div class="hint" id="sourceFolderLabel">未選択</div>
+        <div class="geo-btn-row" style="margin-top:8px;">
+          <button type="button" id="pickDestFolderBtn" class="btn-teal">②保存先フォルダを選択</button>
+        </div>
+        <div class="hint" id="destFolderLabel">未選択</div>
+        <button type="button" id="runPhotoSortBtn" class="add-row-btn" style="margin-top:10px;">③出演者名で検索してコピー実行</button>
+        <div class="geo-status" id="photoSortStatus"></div>
+        <div id="photoSortResults" style="margin-top:8px;font-size:11.5px;line-height:1.6;"></div>
+        <div class="hint">出演者欄のアーティスト名とファイル名を、記号・スペースを無視した部分一致で照合します。誤検出・見逃しがないか、最後に必ずコピー先フォルダをご確認ください。</div>
+        <div class="hint">再実行すると、その時点の出演者リストに合わせてフォルダの中身も同期されます（出演者が減った場合は該当ファイルを削除、増えた場合は追加、写真が更新されていれば新しいものに置き換え）。このフォルダに手動で入れた無関係なファイルも削除対象になるのでご注意ください。</div>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <h2>概要・リンク・その他</h2>
+      <div class="field">
+        <label>概要（1行=1項目、●で表示されます）</label>
+        <textarea id="f_overview" placeholder="キッチンカー出店あり&#10;一眼レフカメラのみ撮影エリアあり(有料)"></textarea>
+      </div>
+      <div class="field">
+        <label>参考URL（1行=1件、「ラベル: URL」形式）</label>
+        <textarea id="f_links" placeholder="公式サイト: https://example.com&#10;会場アクセス: https://example.com/access"></textarea>
+      </div>
+      <div class="field">
+        <label>その他備考（物販手数料など）</label>
+        <textarea id="f_other" placeholder="【物販手数料】単日出演:5,000円／日 ..."></textarea>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <h2>タイムテーブル</h2>
+      <div class="conflict-box" id="conflictWarnings"></div>
+
+      <div class="subsection-title">開場前（主催者入り・リハなど／OPENより前）</div>
+      <div class="rows-table-wrap">
+        <table class="rows-edit" id="preRowsTable">
+          <thead><tr id="preRowsHead"></tr></thead>
+          <tbody id="preRowsBody"></tbody>
+        </table>
+      </div>
+      <button type="button" class="add-mini-btn" id="addPreRowBtn">＋ 主催者入り/リハ枠を追加（OPENより前）</button>
+
+      <div class="open-hint-box" id="openRowHint">
+        <span id="openRowHintText"></span>
+        <button type="button" id="toggleOpenRowBtn" class="quick-add" style="display:inline-block;width:auto;margin-top:0;margin-left:8px;vertical-align:middle;">OPEN枠を削除</button>
+      </div>
+
+      <div class="subsection-title">OPEN以降（出演・調整枠）</div>
+      <div class="rows-table-wrap">
+        <table class="rows-edit" id="rowsTable">
+          <thead><tr id="rowsHead"></tr></thead>
+          <tbody id="rowsBody"></tbody>
+        </table>
+      </div>
+      <button type="button" class="add-row-btn" id="addRowBtn">＋ 行を追加</button>
+      <button type="button" class="quick-add" id="addBreakBtn">＋【調整時間】を追加</button>
+      <div class="hint">持ち時間→終了時間、「特典会/出演何分後」「物販/時間(分)」→特典会の開始・終了、「楽屋/入何分前」「楽屋/出何分後」→楽屋の入り・退室時間を、それぞれ自動計算します（分数の入力欄はPDFには出力されません）。</div>
+      <div class="hint">終了時間を確定（入力欄からフォーカスを外す）すると、次の枠の開始時間に自動的に反映されます。</div>
+      <div class="hint">実際の時間差と持ち時間・物販時間の数値が一致しない場合、上に警告が表示されます。</div>
+      <div class="hint">楽屋・車両・撮影可否・特典会ブースなどは、すべての行で未入力の場合PDF/プレビューの列ごと非表示になり、他の列が広く表示されます。</div>
+      <div class="hint">「特典会/出演何分後」に入力すると並行物販の判定になります。自動判定は「並行→前物販→終演後」の順ですが、「物販区分（手動指定）」で並行／前物販／終演後／中物販を選ぶと、そちらが優先されます（空欄なら自動判定のまま）。</div>
+      <div class="hint">同じ特典会ブース・同じ楽屋番号を使う出演者同士で時間が重なっている場合、上に警告が表示されます。</div>
+    </div>
+
+    <div class="field-group">
+      <h2>テキスト案内文（コピー用）</h2>
+      <div class="field">
+        <label>冒頭文タイプ</label>
+        <select id="f_greetingType">
+          <option value="announce" selected>①告知協力依頼（初回案内）</option>
+          <option value="change">②タイムテーブル変更のお知らせ</option>
+          <option value="confirm">③タイムテーブル確定のご確認依頼</option>
+        </select>
+        <div class="hint">②③には「タイムテーブルの確認後、修正がある場合は〇月〇日(〇)〇〇:〇〇までにご連絡ください」の一文が入ります。〇の部分は書き出したテキスト内で直接ご入力ください。</div>
+      </div>
+      <textarea id="shareTextArea" readonly></textarea>
+      <div class="geo-btn-row" style="margin-top:8px;">
+        <button type="button" id="copyShareTextBtn" class="btn-teal" style="margin-top:0;">全文をコピー</button>
+        <button type="button" id="openLineBtn" class="btn-outline">LINEで開く</button>
+      </div>
+      <div class="hint">テキストエリアをクリックすると全選択されます。手動でコピーする場合はCtrl+C（Macは⌘+C）してください。</div>
+      <div class="hint">「LINEで開く」はLINEアプリが入っている端末で、案内文が入力済みの状態でトーク選択画面を開きます。宛先はLINE側で毎回選んで送信してください。</div>
+    </div>
+
+    <div class="actions">
+      <button id="exportBtn">PDFに書き出す</button>
+      <button class="btn-ghost" id="resetBtn">リセット</button>
+    </div>
+  </div>
+
+  <!-- ========== PREVIEW PANEL ========== -->
+  <div class="preview-panel">
+    <div class="sheet" id="sheet">
+      <div class="sheet-header">
+        <h2 class="sheet-title" id="p_title">（タイトル未入力）</h2>
+      </div>
+
+      <dl class="meta-grid" id="metaGrid"></dl>
+
+      <div class="sheet-section" id="overviewSection">
+        <h3>概要</h3>
+        <ul class="bullets" id="p_overview"></ul>
+      </div>
+
+      <div class="sheet-section" id="otherSection">
+        <h3>その他</h3>
+        <div id="p_other" style="font-size:11.5px;white-space:pre-wrap;line-height:1.5;"></div>
+      </div>
+
+      <div class="sheet-section">
+        <h3>タイムテーブル</h3>
+        <table class="sheet-table" id="previewTable">
+          <thead><tr id="previewHead"></tr></thead>
+          <tbody id="previewBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const DAYS = ['日','月','火','水','木','金','土'];
+  const PREFECTURES = ["大阪府","兵庫県","北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県","茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県","新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県","三重県","滋賀県","京都府","奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
+
+  const SEED_VENUES = {
+    'osaka ruido|大阪府': {address:'〒542-0081 大阪市中央区南船場3丁目10-11 FPG links SHINSAIBASHI B1F'},
+    'glion arena kobe|兵庫県': {address:'兵庫県神戸市中央区新港町2-1'},
+    'tottei park|兵庫県': {address:'兵庫県神戸市中央区新港町2-1'},
+  };
+  let addressBook = Object.assign({}, SEED_VENUES);
+
+  const state = {
+    performers: [''],
+    prices: [{label:'', amount:''}],
+    tickets: [{label:'', url:''}],
+    preRows: [],
+    rows: [],
+    row0AutoSync: true,
+    showOpenRow: true
+  };
+
+  const ALL_COLS = [
+    {key:'start', label:'開始', type:'time', w:'90', core:true},
+    {key:'end', label:'終了', type:'time', w:'90', core:true},
+    {key:'name', label:'アーティスト名', type:'text', cls:'name-input', core:true},
+    {key:'duration', label:'持ち時間', type:'text', w:'70', core:true},
+    {key:'mic', label:'マイク', type:'text', w:'60', core:true},
+    {key:'meetOffsetMin', label:'特典会/出演何分後', type:'text', cls:'narrow', formOnly:true},
+    {key:'meetDurationMin', label:'物販/時間(分)', type:'text', cls:'narrow', formOnly:true},
+    {key:'meetStart', label:'特典会/開始', type:'time', w:'90', formOnly:true},
+    {key:'meetEnd', label:'特典会/終了', type:'time', w:'90', formOnly:true},
+    {key:'meetBooth', label:'特典会ブース', type:'text', w:'60', formOnly:true},
+    {key:'merchCategory', label:'物販区分（手動指定）', type:'select',
+      options:[{value:'',label:'（自動）'},{value:'並行',label:'並行'},{value:'前物販',label:'前物販'},{value:'終演後',label:'終演後'},{value:'中物販',label:'中物販'}],
+      cls:'narrow', formOnly:true},
+    {key:'merch', label:'物販', cls:'wide', previewOnly:true,
+      compute: row => composeMerch(row),
+      used: row => !!(row.meetStart && row.meetEnd)},
+    {key:'dressingRoom', label:'楽屋番号', type:'text', cls:'narrow', formOnly:true},
+    {key:'dressingBeforeMin', label:'楽屋/入何分前', type:'text', cls:'narrow', formOnly:true},
+    {key:'dressingAfterMin', label:'楽屋/出何分後', type:'text', cls:'narrow', formOnly:true},
+    {key:'dressing', label:'楽屋', cls:'wide', previewOnly:true,
+      compute: row => composeDressing(row),
+      used: row => !!(row.dressingRoom || row.dressingIn || row.dressingOut)},
+    {key:'vehicle', label:'車両', type:'checkbox', w:'40'},
+    {key:'photo', label:'撮影可否', type:'photo', cls:'wide'},
+    {key:'note', label:'備考', type:'text', cls:'wide'},
+  ];
+
+  function formCols(){ return ALL_COLS.filter(c=>!c.previewOnly); }
+  function previewColsList(){ return ALL_COLS.filter(c=>!c.formOnly).filter(c=> c.core || isColUsed(c)); }
+
+  function blankRow(){
+    return {
+      start:'', end:'', name:'', duration:'', mic:'',
+      meetOffsetMin:'', meetDurationMin:'', meetStart:'', meetEnd:'', meetBooth:'', merchCategory:'',
+      dressingRoom:'', dressingBeforeMin:'', dressingAfterMin:'', dressingIn:'', dressingOut:'',
+      vehicle:false, photo:'', note:''
+    };
+  }
+  state.rows.push(blankRow());
+
+  function escapeHtml(str){
+    return (str||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+  function escapeAttr(str){ return escapeHtml(str); }
+  function val(id){ return document.getElementById(id).value.trim(); }
+  function rowHasData(r){ return Object.values(r).some(v => v !== '' && v !== false); }
+
+  // ---------- prefecture select ----------
+  const regionSelect = document.getElementById('f_venueRegion');
+  PREFECTURES.forEach(p=>{
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = p;
+    regionSelect.appendChild(opt);
+  });
+  regionSelect.value = '大阪府';
+
+  // ---------- date / weekday formatting ----------
+  function formatDateJP(dateStr){
+    if(!dateStr) return '';
+    const d = new Date(dateStr+'T00:00:00');
+    return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日(${DAYS[d.getDay()]})`;
+  }
+  function formatDateTimeShortJP(dtStr){
+    if(!dtStr) return '';
+    const d = new Date(dtStr);
+    return `${d.getMonth()+1}/${d.getDate()}(${DAYS[d.getDay()]})${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+  function formatDateShortJP(dateStr){
+    if(!dateStr) return '';
+    const d = new Date(dateStr+'T00:00:00');
+    return `${d.getMonth()+1}/${d.getDate()}(${DAYS[d.getDay()]})`;
+  }
+  document.getElementById('f_date').addEventListener('input', ()=>{
+    document.getElementById('dateWeekdayHint').textContent = formatDateJP(val('f_date'));
+    renderPreview();
+  });
+
+  // ---------- number comma formatting ----------
+  function formatNumberComma(str){
+    if(!str) return str;
+    return str.replace(/\d+/g, m => Number(m).toLocaleString('en-US'));
+  }
+
+  // ---------- time helpers ----------
+  function timeToMinutes(t){
+    if(!t) return null;
+    const parts = t.split(':');
+    if(parts.length < 2) return null;
+    const h = parseInt(parts[0],10), m = parseInt(parts[1],10);
+    if(isNaN(h) || isNaN(m)) return null;
+    return h*60+m;
+  }
+  function minutesToTime(total){
+    total = ((total % 1440) + 1440) % 1440;
+    const hh = String(Math.floor(total/60)).padStart(2,'0');
+    const mm = String(total%60).padStart(2,'0');
+    return `${hh}:${mm}`;
+  }
+  function recalcEnd(row){
+    const startMin = timeToMinutes(row.start);
+    const dur = parseInt(row.duration, 10);
+    if(startMin != null && !isNaN(dur)){
+      row.end = minutesToTime(startMin + dur);
+    }
+  }
+  function recalcMeet(row, changedField){
+    const durMin = parseInt(row.meetDurationMin, 10);
+    const offsetMin = parseInt(row.meetOffsetMin, 10);
+    const endMin = timeToMinutes(row.end);
+
+    if(!isNaN(offsetMin) && endMin != null){
+      // 「物販/後何分」がある場合は従来通り出演終了時間からの自動計算を優先
+      const startMin = endMin + offsetMin;
+      row.meetStart = minutesToTime(startMin);
+      if(!isNaN(durMin)){
+        row.meetEnd = minutesToTime(startMin + durMin);
+      }
+      return;
+    }
+
+    if(isNaN(durMin)) return;
+    // 「物販/後何分」を使わない場合：物販持ち時間＋開始 or 終了の直接入力から、もう一方を自動計算
+    if(changedField === 'meetEnd'){
+      const em = timeToMinutes(row.meetEnd);
+      if(em != null) row.meetStart = minutesToTime(em - durMin);
+    } else {
+      const sm = timeToMinutes(row.meetStart);
+      if(sm != null) row.meetEnd = minutesToTime(sm + durMin);
+    }
+  }
+  function recalcDressing(row){
+    const startMin = timeToMinutes(row.start);
+    const endMin = timeToMinutes(row.end);
+    const before = parseInt(row.dressingBeforeMin, 10);
+    const after = parseInt(row.dressingAfterMin, 10);
+    if(startMin != null && !isNaN(before)){
+      row.dressingIn = minutesToTime(startMin - before);
+    }
+    if(endMin != null && !isNaN(after)){
+      row.dressingOut = minutesToTime(endMin + after);
+    }
+  }
+  function composeDressing(row){
+    const room = row.dressingRoom || '';
+    if(row.dressingIn && row.dressingOut){
+      return room ? `${room} (${row.dressingIn}-${row.dressingOut})` : `(${row.dressingIn}-${row.dressingOut})`;
+    }
+    return room;
+  }
+  function isParallelMerch(row){
+    // 「物販/後何分」を使って自動計算された場合＝並行物販。
+    // 開始・終了を直接入力した場合（オフセット未使用）＝終演後物販。
+    return row.meetOffsetMin !== '' && row.meetOffsetMin != null;
+  }
+  function merchTiming(row){
+    if(isParallelMerch(row)) return 'parallel';
+    const meetStartMin = timeToMinutes(row.meetStart);
+    const rowStartMin = timeToMinutes(row.start);
+    if(meetStartMin != null && rowStartMin != null && meetStartMin < rowStartMin){
+      return 'before';
+    }
+    return 'after';
+  }
+  function composeMerch(row){
+    if(!row.meetStart || !row.meetEnd) return '';
+    const boothPart = row.meetBooth || '';
+    let label;
+    if(row.merchCategory){
+      // 手動指定があれば自動判定より優先。並行・前物販はブース名を付ける、終演後・中物販は付けない。
+      label = (row.merchCategory === '並行' || row.merchCategory === '前物販')
+        ? (row.merchCategory + boothPart)
+        : row.merchCategory;
+    } else {
+      const timing = merchTiming(row);
+      if(timing === 'parallel') label = '並行' + boothPart;
+      else if(timing === 'before') label = '前物販' + boothPart;
+      else label = '終演後';
+    }
+    return `${row.meetStart}-${row.meetEnd} / ${label}`;
+  }
+  function updateCellValue(group, idx, field, value){
+    if(value == null) return;
+    const bodyId = group === 'pre' ? 'preRowsBody' : 'rowsBody';
+    const inp = document.querySelector(`#${bodyId} input[data-idx="${idx}"][data-field="${field}"]`);
+    if(inp) inp.value = value;
+  }
+  function getGroupArray(group){ return group === 'pre' ? state.preRows : state.rows; }
+
+  // ---------- performers list ----------
+  function renderPerformersForm(){
+    const wrap = document.getElementById('performersList');
+    wrap.innerHTML = state.performers.map((p,idx)=>`
+      <div class="list-row">
+        <input type="text" data-idx="${idx}" class="performer-input" placeholder="出演者名" value="${escapeAttr(p)}">
+        <div class="rowbtns">
+          <button type="button" class="icon-btn" data-act="up" data-idx="${idx}" title="上へ">↑</button>
+          <button type="button" class="icon-btn" data-act="down" data-idx="${idx}" title="下へ">↓</button>
+          <button type="button" class="icon-btn danger" data-act="del" data-idx="${idx}" title="削除">✕</button>
+        </div>
+      </div>`).join('');
+    wrap.querySelectorAll('.performer-input').forEach(inp=>{
+      inp.addEventListener('input', e=>{
+        state.performers[+e.target.dataset.idx] = e.target.value;
+        renderPreview();
+      });
+    });
+    wrap.querySelectorAll('button[data-act]').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        const idx = +e.currentTarget.dataset.idx, act = e.currentTarget.dataset.act;
+        if(act==='del'){ state.performers.splice(idx,1); if(!state.performers.length) state.performers.push(''); }
+        else if(act==='up' && idx>0){ [state.performers[idx-1], state.performers[idx]] = [state.performers[idx], state.performers[idx-1]]; }
+        else if(act==='down' && idx<state.performers.length-1){ [state.performers[idx+1], state.performers[idx]] = [state.performers[idx], state.performers[idx+1]]; }
+        renderPerformersForm();
+        renderPreview();
+      });
+    });
+  }
+  document.getElementById('addPerformerBtn').addEventListener('click', ()=>{
+    state.performers.push('');
+    renderPerformersForm();
+  });
+  document.getElementById('autoPerformers').addEventListener('click', ()=>{
+    const excluded = ['調整','休憩','OPEN','特典会','撤収','撤退','リハ','主催','準備'];
+    const names = state.preRows.concat(state.rows).map(r=>r.name)
+      .filter(n=> n && !excluded.some(k=> n.includes(k)));
+    const uniq = [...new Set(names)];
+    state.performers = uniq.length ? uniq : [''];
+    renderPerformersForm();
+    renderPreview();
+  });
+
+  // ---------- prices list ----------
+  function renderPricesForm(){
+    const wrap = document.getElementById('pricesList');
+    wrap.innerHTML = state.prices.map((p,idx)=>`
+      <div class="list-row price-row">
+        <input type="text" data-idx="${idx}" data-field="label" class="price-input" placeholder="種別（例：前売）" value="${escapeAttr(p.label)}">
+        <input type="text" data-idx="${idx}" data-field="amount" class="price-input" placeholder="金額（例：2500円）" value="${escapeAttr(p.amount)}">
+        <div class="rowbtns">
+          <button type="button" class="icon-btn" data-act="up" data-idx="${idx}" title="上へ">↑</button>
+          <button type="button" class="icon-btn" data-act="down" data-idx="${idx}" title="下へ">↓</button>
+          <button type="button" class="icon-btn danger" data-act="del" data-idx="${idx}" title="削除">✕</button>
+        </div>
+      </div>`).join('');
+    wrap.querySelectorAll('.price-input').forEach(inp=>{
+      inp.addEventListener('input', e=>{
+        const idx = +e.target.dataset.idx, field = e.target.dataset.field;
+        state.prices[idx][field] = e.target.value;
+        renderPreview();
+      });
+      if(inp.dataset.field === 'amount'){
+        inp.addEventListener('blur', e=>{
+          const idx = +e.target.dataset.idx;
+          const formatted = formatNumberComma(e.target.value);
+          e.target.value = formatted;
+          state.prices[idx].amount = formatted;
+          renderPreview();
+        });
+      }
+    });
+    wrap.querySelectorAll('button[data-act]').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        const idx = +e.currentTarget.dataset.idx, act = e.currentTarget.dataset.act;
+        if(act==='del'){ state.prices.splice(idx,1); if(!state.prices.length) state.prices.push({label:'',amount:''}); }
+        else if(act==='up' && idx>0){ [state.prices[idx-1], state.prices[idx]] = [state.prices[idx], state.prices[idx-1]]; }
+        else if(act==='down' && idx<state.prices.length-1){ [state.prices[idx+1], state.prices[idx]] = [state.prices[idx], state.prices[idx+1]]; }
+        renderPricesForm();
+        renderPreview();
+      });
+    });
+  }
+  document.getElementById('addPriceBtn').addEventListener('click', ()=>{
+    state.prices.push({label:'',amount:''});
+    renderPricesForm();
+  });
+
+  // ---------- tickets list ----------
+  function renderTicketsForm(){
+    const wrap = document.getElementById('ticketsList');
+    wrap.innerHTML = state.tickets.map((t,idx)=>`
+      <div class="list-row price-row">
+        <input type="text" data-idx="${idx}" data-field="label" class="ticket-input" placeholder="ラベル（例：①）" value="${escapeAttr(t.label)}">
+        <input type="text" data-idx="${idx}" data-field="url" class="ticket-input" placeholder="https://..." value="${escapeAttr(t.url)}">
+        <div class="rowbtns">
+          <button type="button" class="icon-btn" data-act="up" data-idx="${idx}" title="上へ">↑</button>
+          <button type="button" class="icon-btn" data-act="down" data-idx="${idx}" title="下へ">↓</button>
+          <button type="button" class="icon-btn danger" data-act="del" data-idx="${idx}" title="削除">✕</button>
+        </div>
+      </div>`).join('');
+    wrap.querySelectorAll('.ticket-input').forEach(inp=>{
+      inp.addEventListener('input', e=>{
+        const idx = +e.target.dataset.idx, field = e.target.dataset.field;
+        state.tickets[idx][field] = e.target.value;
+        renderPreview();
+      });
+    });
+    wrap.querySelectorAll('button[data-act]').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        const idx = +e.currentTarget.dataset.idx, act = e.currentTarget.dataset.act;
+        if(act==='del'){ state.tickets.splice(idx,1); if(!state.tickets.length) state.tickets.push({label:'',url:''}); }
+        else if(act==='up' && idx>0){ [state.tickets[idx-1], state.tickets[idx]] = [state.tickets[idx], state.tickets[idx-1]]; }
+        else if(act==='down' && idx<state.tickets.length-1){ [state.tickets[idx+1], state.tickets[idx]] = [state.tickets[idx], state.tickets[idx+1]]; }
+        renderTicketsForm();
+        renderPreview();
+      });
+    });
+  }
+  document.getElementById('addTicketBtn').addEventListener('click', ()=>{
+    state.tickets.push({label:'',url:''});
+    renderTicketsForm();
+  });
+
+  // ---------- venue address book (no external network calls) ----------
+  function setGeoStatus(msg, type){
+    const el = document.getElementById('geoStatus');
+    el.textContent = msg;
+    el.className = 'geo-status ' + (type||'');
+  }
+  function venueKey(name, pref){ return name.trim().toLowerCase() + '|' + pref; }
+
+  async function loadSavedAddressBook(){
+    try{
+      const res = await window.storage.get('venue_address_book', false);
+      if(res && res.value) return JSON.parse(res.value);
+    }catch(e){ /* not saved yet - ignore */ }
+    return {};
+  }
+  async function persistAddressBook(){
+    try{
+      await window.storage.set('venue_address_book', JSON.stringify(addressBook), false);
+    }catch(e){
+      console.error('住所帳の保存に失敗しました', e);
+    }
+  }
+
+  function lookupVenue(showEmptyMsg){
+    const name = val('f_venueName');
+    const pref = regionSelect.value;
+    if(!name){ if(showEmptyMsg) setGeoStatus('会場名を入力してください', 'error'); return; }
+    const entry = addressBook[venueKey(name, pref)];
+    if(entry){
+      document.getElementById('f_venueAddress').value = entry.address;
+      setGeoStatus('登録済みの住所を自動入力しました。', 'success');
+    } else if(showEmptyMsg) {
+      setGeoStatus('この会場は未登録です。住所を入力して「この住所を保存」を押すと、次回から自動入力されます。', 'info');
+    }
+    updateMapLink();
+    renderPreview();
+  }
+  async function saveCurrentVenue(){
+    const name = val('f_venueName');
+    const pref = regionSelect.value;
+    const address = val('f_venueAddress');
+    if(!name || !address){ setGeoStatus('会場名と住所の両方を入力してから保存してください', 'error'); return; }
+    addressBook[venueKey(name, pref)] = {address};
+    await persistAddressBook();
+    setGeoStatus('住所を保存しました。次回から会場名+都道府県で自動入力されます。', 'success');
+    updateMapLink();
+  }
+  function updateMapLink(){
+    const address = val('f_venueAddress');
+    const wrap = document.getElementById('mapLinkWrap');
+    if(address){
+      wrap.style.display = '';
+      document.getElementById('mapLinkOnly').href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address);
+    } else {
+      wrap.style.display = 'none';
+    }
+  }
+  document.getElementById('geoSearchBtn').addEventListener('click', ()=> lookupVenue(true));
+  document.getElementById('saveVenueBtn').addEventListener('click', saveCurrentVenue);
+  document.getElementById('f_venueName').addEventListener('blur', ()=> lookupVenue(false));
+  regionSelect.addEventListener('change', ()=> lookupVenue(false));
+  document.getElementById('f_venueAddress').addEventListener('input', ()=>{ updateMapLink(); renderPreview(); });
+
+  // ---------- rows form (timetable) ----------
+  function ensurePhotoOptsDatalist(){
+    if(!document.getElementById('photoOpts')){
+      const dl = document.createElement('datalist');
+      dl.id = 'photoOpts';
+      dl.innerHTML = ['静止画OK/動画OK','静止画NG/動画NG','静止画OK/動画NG','静止画NG/動画OK','応相談'].map(v=>`<option value="${v}">`).join('');
+      document.body.appendChild(dl);
+    }
+  }
+
+  function renderRowsFormGroup(group){
+    const arr = getGroupArray(group);
+    const cols = formCols();
+    const headEl = document.getElementById(group === 'pre' ? 'preRowsHead' : 'rowsHead');
+    const bodyEl = document.getElementById(group === 'pre' ? 'preRowsBody' : 'rowsBody');
+    headEl.innerHTML = cols.map(c=>`<th>${c.label}</th>`).join('') + '<th></th>';
+    bodyEl.innerHTML = arr.map((row, idx)=>{
+      const cells = cols.map(c=>{
+        if(c.type === 'checkbox'){
+          return `<td><input type="checkbox" data-group="${group}" data-idx="${idx}" data-field="${c.key}" ${row[c.key] ? 'checked' : ''}></td>`;
+        }
+        if(c.type === 'select'){
+          const opts = (c.options||[]).map(o=> `<option value="${escapeAttr(o.value)}" ${row[c.key]===o.value?'selected':''}>${escapeHtml(o.label)}</option>`).join('');
+          return `<td><select class="${c.cls||''}" data-group="${group}" data-idx="${idx}" data-field="${c.key}">${opts}</select></td>`;
+        }
+        if(c.type === 'photo'){
+          return `<td><input type="text" list="photoOpts" class="${c.cls||''}" data-group="${group}" data-idx="${idx}" data-field="${c.key}" value="${escapeAttr(row[c.key])}"></td>`;
+        }
+        return `<td><input type="text" placeholder="${c.type==='time'?'10:30':''}" class="${c.cls||''}" style="${c.w?`width:${c.w}px`:''}" data-group="${group}" data-idx="${idx}" data-field="${c.key}" value="${escapeAttr(row[c.key])}"></td>`;
+      }).join('');
+      return `<tr>${cells}<td><div class="rowbtns">
+        <button type="button" class="icon-btn" data-act="copy" data-group="${group}" data-idx="${idx}" title="コピー（下に複製）">⧉</button>
+        <button type="button" class="icon-btn" data-act="up" data-group="${group}" data-idx="${idx}" title="上へ">↑</button>
+        <button type="button" class="icon-btn" data-act="down" data-group="${group}" data-idx="${idx}" title="下へ">↓</button>
+        <button type="button" class="icon-btn danger" data-act="del" data-group="${group}" data-idx="${idx}" title="削除">✕</button>
+      </div></td></tr>`;
+    }).join('');
+
+    ensurePhotoOptsDatalist();
+    bodyEl.querySelectorAll('input, select').forEach(inp=>{
+      inp.addEventListener('input', onRowFieldChange);
+      inp.addEventListener('change', onRowFieldChange);
+    });
+    bodyEl.querySelectorAll('button[data-act]').forEach(btn=> btn.addEventListener('click', onRowAction));
+  }
+
+  function renderOpenRowHint(){
+    const openT = val('f_openTime'), startT = val('f_startTime');
+    const textEl = document.getElementById('openRowHintText');
+    const btn = document.getElementById('toggleOpenRowBtn');
+    if(openT && startT){
+      if(state.showOpenRow){
+        textEl.textContent = `OPEN枠：${openT}-${startT}（自動挿入されます）。OPEN以降の1組目の開始時間はSTART時間（${startT}）に自動連動します。`;
+        btn.textContent = 'OPEN枠を削除';
+      } else {
+        textEl.textContent = 'OPEN枠は非表示にしています（開場・開演時間の情報は保持されたままです）。';
+        btn.textContent = 'OPEN枠を表示する';
+      }
+      btn.style.display = '';
+    } else {
+      textEl.textContent = '開場時間・開演時間の両方を入力すると、OPEN枠が自動挿入されます。';
+      btn.style.display = 'none';
+    }
+  }
+  document.getElementById('toggleOpenRowBtn').addEventListener('click', ()=>{
+    state.showOpenRow = !state.showOpenRow;
+    renderOpenRowHint();
+    renderPreview();
+  });
+
+  function renderRowsForm(){
+    renderRowsFormGroup('pre');
+    renderRowsFormGroup('main');
+    renderOpenRowHint();
+  }
+
+  function cascadeFrom(group, idx){
+    const arr = getGroupArray(group);
+    let i = idx;
+    while(i < arr.length - 1){
+      const cur = arr[i];
+      const next = arr[i+1];
+      if(!cur.end) break;
+      next.start = cur.end;
+      recalcEnd(next);
+      recalcMeet(next);
+      recalcDressing(next);
+      i++;
+    }
+  }
+
+  function onRowFieldChange(e){
+    const group = e.target.dataset.group;
+    const idx = +e.target.dataset.idx, field = e.target.dataset.field;
+    const arr = getGroupArray(group);
+    const row = arr[idx];
+    row[field] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+
+    if(group === 'main' && idx === 0 && field === 'start'){ state.row0AutoSync = false; }
+
+    let endMayHaveChanged = false;
+    if(field === 'start' || field === 'duration'){
+      recalcEnd(row);
+      updateCellValue(group, idx, 'end', row.end);
+      recalcMeet(row, field);
+      updateCellValue(group, idx, 'meetStart', row.meetStart);
+      updateCellValue(group, idx, 'meetEnd', row.meetEnd);
+      recalcDressing(row);
+      endMayHaveChanged = true;
+    } else if(field === 'end'){
+      recalcMeet(row, field);
+      updateCellValue(group, idx, 'meetStart', row.meetStart);
+      updateCellValue(group, idx, 'meetEnd', row.meetEnd);
+      recalcDressing(row);
+      endMayHaveChanged = true;
+    } else if(field === 'meetOffsetMin' || field === 'meetDurationMin'){
+      recalcMeet(row, field);
+      updateCellValue(group, idx, 'meetStart', row.meetStart);
+      updateCellValue(group, idx, 'meetEnd', row.meetEnd);
+    } else if(field === 'meetStart'){
+      recalcMeet(row, 'meetStart');
+      updateCellValue(group, idx, 'meetEnd', row.meetEnd);
+    } else if(field === 'meetEnd'){
+      recalcMeet(row, 'meetEnd');
+      updateCellValue(group, idx, 'meetStart', row.meetStart);
+    } else if(field === 'dressingBeforeMin' || field === 'dressingAfterMin'){
+      recalcDressing(row);
+    }
+
+    // 出演終了時間が「確定」した時点(=フォーカスを外れたタイミング)で、次の枠の開始時間へ連動させる
+    if(endMayHaveChanged && e.type === 'change'){
+      cascadeFrom(group, idx);
+      renderRowsForm();
+    }
+    renderPreview();
+  }
+
+  function onRowAction(e){
+    const group = e.currentTarget.dataset.group;
+    const arr = getGroupArray(group);
+    const idx = +e.currentTarget.dataset.idx, act = e.currentTarget.dataset.act;
+    if(act === 'del'){
+      arr.splice(idx,1);
+      if(group === 'main' && arr.length===0) arr.push(blankRow());
+    }
+    else if(act === 'up' && idx>0){ [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]]; }
+    else if(act === 'down' && idx<arr.length-1){ [arr[idx+1], arr[idx]] = [arr[idx], arr[idx+1]]; }
+    else if(act === 'copy'){
+      const src = arr[idx];
+      const newRow = blankRow();
+      // 出演持ち時間・特典会持ち時間・楽屋の入り/退室オフセットを引き継ぐ
+      newRow.duration = src.duration;
+      newRow.meetOffsetMin = src.meetOffsetMin;
+      newRow.meetDurationMin = src.meetDurationMin;
+      newRow.dressingBeforeMin = src.dressingBeforeMin;
+      newRow.dressingAfterMin = src.dressingAfterMin;
+      // 開始時間は直前の行の終了時間を引き継ぎ、そこから終了・特典会・楽屋を自動計算
+      newRow.start = src.end || '';
+      recalcEnd(newRow);
+      recalcMeet(newRow);
+      recalcDressing(newRow);
+      arr.splice(idx+1, 0, newRow);
+    }
+    renderRowsForm();
+    renderPreview();
+  }
+
+  document.getElementById('addRowBtn').addEventListener('click', ()=>{
+    const newRow = blankRow();
+    const last = state.rows[state.rows.length-1];
+    if(last && last.end){ newRow.start = last.end; }
+    state.rows.push(newRow);
+    renderRowsForm();
+    renderPreview();
+  });
+  document.getElementById('addBreakBtn').addEventListener('click', ()=>{
+    const r = blankRow();
+    const last = state.rows[state.rows.length-1];
+    if(last && last.end){ r.start = last.end; }
+    r.name = '【調整時間】'; r.duration = '-'; r.mic = '-';
+    state.rows.push(r);
+    renderRowsForm();
+    renderPreview();
+  });
+  document.getElementById('addPreRowBtn').addEventListener('click', ()=>{
+    const newRow = blankRow();
+    const last = state.preRows[state.preRows.length-1];
+    if(last && last.end){ newRow.start = last.end; }
+    state.preRows.push(newRow);
+    renderRowsForm();
+    renderPreview();
+  });
+
+  // ---------- 開演時間 -> OPEN以降1組目 開始 の初期連動 ----------
+  function syncRow0Start(){
+    if(!state.row0AutoSync || !state.rows[0]) return;
+    const st = document.getElementById('f_startTime').value;
+    state.rows[0].start = st;
+    recalcEnd(state.rows[0]);
+    recalcMeet(state.rows[0]);
+    recalcDressing(state.rows[0]);
+    cascadeFrom('main', 0);
+    renderRowsForm();
+  }
+  document.getElementById('f_startTime').addEventListener('input', ()=>{ syncRow0Start(); renderPreview(); });
+  document.getElementById('f_openTime').addEventListener('input', renderPreview);
+
+  // ---------- other header fields ----------
+  ['f_title','f_announce','f_sale','f_overview','f_links','f_other']
+    .forEach(id=> document.getElementById(id).addEventListener('input', renderPreview));
+  document.getElementById('f_greetingType').addEventListener('change', renderPreview);
+
+  // ---------- reset ----------
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    if(!confirm('入力内容をすべてリセットします。よろしいですか？（保存済みの会場住所帳・保存済みイベントは消えません）')) return;
+    ['f_title','f_date','f_openTime','f_startTime','f_announce','f_sale','f_venueName','f_venueAddress','f_overview','f_links','f_other']
+      .forEach(id=> document.getElementById(id).value = '');
+    regionSelect.value = '大阪府';
+    document.getElementById('f_greetingType').value = 'announce';
+    document.getElementById('dateWeekdayHint').textContent = '';
+    setGeoStatus('', '');
+    state.performers = [''];
+    state.prices = [{label:'',amount:''}];
+    state.tickets = [{label:'',url:''}];
+    state.preRows = [];
+    state.rows = [blankRow()];
+    state.row0AutoSync = true;
+    state.showOpenRow = true;
+    currentEventId = null;
+    setSavedStatus('', '');
+    renderPerformersForm();
+    renderPricesForm();
+    renderTicketsForm();
+    renderRowsForm();
+    updateMapLink();
+    renderPreview();
+  });
+
+  // ---------- saved events (multiple, load anytime) ----------
+  let currentEventId = null;
+
+  function captureCurrentState(){
+    return {
+      title: val('f_title'),
+      date: document.getElementById('f_date').value,
+      openTime: document.getElementById('f_openTime').value,
+      startTime: document.getElementById('f_startTime').value,
+      announce: document.getElementById('f_announce').value,
+      sale: document.getElementById('f_sale').value,
+      venueName: val('f_venueName'),
+      venueRegion: regionSelect.value,
+      venueAddress: val('f_venueAddress'),
+      overview: document.getElementById('f_overview').value,
+      links: document.getElementById('f_links').value,
+      other: document.getElementById('f_other').value,
+      greetingType: document.getElementById('f_greetingType').value,
+      performers: state.performers,
+      prices: state.prices,
+      tickets: state.tickets,
+      preRows: state.preRows,
+      rows: state.rows,
+      row0AutoSync: state.row0AutoSync,
+      showOpenRow: state.showOpenRow
+    };
+  }
+
+  function applySnapshot(snap){
+    document.getElementById('f_title').value = snap.title || '';
+    document.getElementById('f_date').value = snap.date || '';
+    document.getElementById('f_openTime').value = snap.openTime || '';
+    document.getElementById('f_startTime').value = snap.startTime || '';
+    document.getElementById('f_announce').value = snap.announce || '';
+    document.getElementById('f_sale').value = snap.sale || '';
+    document.getElementById('f_venueName').value = snap.venueName || '';
+    regionSelect.value = snap.venueRegion || '';
+    document.getElementById('f_venueAddress').value = snap.venueAddress || '';
+    document.getElementById('f_overview').value = snap.overview || '';
+    document.getElementById('f_links').value = snap.links || '';
+    document.getElementById('f_other').value = snap.other || '';
+    document.getElementById('f_greetingType').value = snap.greetingType || 'announce';
+    document.getElementById('dateWeekdayHint').textContent = formatDateJP(snap.date || '');
+
+    state.performers = (snap.performers && snap.performers.length) ? snap.performers : [''];
+    state.prices = (snap.prices && snap.prices.length) ? snap.prices : [{label:'',amount:''}];
+    state.tickets = (snap.tickets && snap.tickets.length) ? snap.tickets : [{label:'',url:''}];
+    state.preRows = snap.preRows || [];
+    state.rows = (snap.rows && snap.rows.length) ? snap.rows : [blankRow()];
+    state.row0AutoSync = typeof snap.row0AutoSync === 'boolean' ? snap.row0AutoSync : true;
+    state.showOpenRow = typeof snap.showOpenRow === 'boolean' ? snap.showOpenRow : true;
+
+    renderPerformersForm();
+    renderPricesForm();
+    renderTicketsForm();
+    renderRowsForm();
+    updateMapLink();
+    renderPreview();
+  }
+
+  function genId(){ return 'ev_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
+  function setSavedStatus(msg, type){
+    const el = document.getElementById('savedStatus');
+    el.textContent = msg;
+    el.className = 'geo-status ' + (type||'');
+  }
+  async function loadEventIndex(){
+    try{
+      const res = await window.storage.get('events_index', false);
+      if(res && res.value) return JSON.parse(res.value);
+    }catch(e){ /* none saved yet */ }
+    return [];
+  }
+  async function saveEventIndex(index){
+    try{ await window.storage.set('events_index', JSON.stringify(index), false); }
+    catch(e){ console.error('保存済み一覧の保存に失敗しました', e); }
+  }
+  async function renderSavedEventsSelect(){
+    const index = await loadEventIndex();
+    index.sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
+    const sel = document.getElementById('savedEventsSelect');
+    const prevVal = sel.value;
+    sel.innerHTML = '<option value="">保存済みの概要を選択…</option>' + index.map(e=>{
+      const dateLabel = e.date ? formatDateShortJP(e.date) : '';
+      return `<option value="${escapeAttr(e.id)}">${escapeHtml(e.title || '（無題）')}${dateLabel ? '（'+dateLabel+'）' : ''}</option>`;
+    }).join('');
+    if(index.some(e=>e.id===prevVal)) sel.value = prevVal;
+  }
+  async function saveCurrentEvent(forceNew){
+    const snap = captureCurrentState();
+    const title = snap.title || '（無題）';
+    const id = (!forceNew && currentEventId) ? currentEventId : genId();
+    const index = await loadEventIndex();
+    const entry = {id, title, date: snap.date || '', updatedAt: Date.now()};
+    const existingIdx = index.findIndex(e=>e.id===id);
+    if(existingIdx >= 0) index[existingIdx] = entry; else index.push(entry);
+    try{
+      await window.storage.set('event:' + id, JSON.stringify(snap), false);
+      await saveEventIndex(index);
+      currentEventId = id;
+      setSavedStatus(`「${title}」として保存しました。`, 'success');
+      await renderSavedEventsSelect();
+      document.getElementById('savedEventsSelect').value = id;
+    }catch(e){
+      setSavedStatus('保存に失敗しました: ' + e.message, 'error');
+    }
+  }
+  async function loadSelectedEvent(){
+    const sel = document.getElementById('savedEventsSelect');
+    const id = sel.value;
+    if(!id){ setSavedStatus('読み込む概要を選択してください', 'error'); return; }
+    try{
+      const res = await window.storage.get('event:' + id, false);
+      if(!res || !res.value){ setSavedStatus('データが見つかりませんでした', 'error'); return; }
+      const snap = JSON.parse(res.value);
+      applySnapshot(snap);
+      currentEventId = id;
+      setSavedStatus(`「${snap.title || '（無題）'}」を読み込みました。`, 'success');
+    }catch(e){
+      setSavedStatus('読み込みに失敗しました: ' + e.message, 'error');
+    }
+  }
+  async function deleteSelectedEvent(){
+    const sel = document.getElementById('savedEventsSelect');
+    const id = sel.value;
+    if(!id){ setSavedStatus('削除する概要を選択してください', 'error'); return; }
+    if(!confirm('選択した概要を削除します。よろしいですか？')) return;
+    let index = await loadEventIndex();
+    index = index.filter(e=>e.id !== id);
+    await saveEventIndex(index);
+    try{ await window.storage.delete('event:' + id, false); }catch(e){ /* ignore */ }
+    if(currentEventId === id) currentEventId = null;
+    setSavedStatus('削除しました。', 'success');
+    await renderSavedEventsSelect();
+  }
+  document.getElementById('saveEventBtn').addEventListener('click', ()=> saveCurrentEvent(false));
+  document.getElementById('saveAsNewEventBtn').addEventListener('click', ()=> saveCurrentEvent(true));
+  document.getElementById('loadEventBtn').addEventListener('click', loadSelectedEvent);
+  document.getElementById('deleteEventBtn').addEventListener('click', deleteSelectedEvent);
+
+  // ---------- JSON export / import (works without a Claude account) ----------
+  function exportEventJSON(){
+    const snap = captureCurrentState();
+    const title = snap.title || '概要書';
+    const dateStr = snap.date || '';
+    const filename = dateStr ? `${dateStr}_${title}.json` : `${title}.json`;
+    const dataStr = JSON.stringify(snap, null, 2);
+    const blob = new Blob([dataStr], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setSavedStatus(`「${title}」をJSONファイルとして書き出しました。`, 'success');
+  }
+  function importEventJSON(file){
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try{
+        const snap = JSON.parse(e.target.result);
+        applySnapshot(snap);
+        currentEventId = null;
+        setSavedStatus(`「${snap.title || '（無題）'}」をJSONファイルから読み込みました。`, 'success');
+      }catch(err){
+        setSavedStatus('読み込みに失敗しました。ファイル形式をご確認ください。', 'error');
+      }
+    };
+    reader.onerror = () => setSavedStatus('ファイルの読み込みに失敗しました。', 'error');
+    reader.readAsText(file);
+  }
+  document.getElementById('exportJsonBtn').addEventListener('click', exportEventJSON);
+  document.getElementById('importJsonBtn').addEventListener('click', ()=> document.getElementById('importJsonInput').click());
+  document.getElementById('importJsonInput').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(file) importEventJSON(file);
+    e.target.value = '';
+  });
+
+
+  function timeRangesOverlap(aStart, aEnd, bStart, bEnd){
+    const as = timeToMinutes(aStart), ae = timeToMinutes(aEnd), bs = timeToMinutes(bStart), be = timeToMinutes(bEnd);
+    if(as==null || ae==null || bs==null || be==null) return false;
+    return as < be && bs < ae;
+  }
+  function checkConflicts(){
+    const conflicts = [];
+    const combined = state.preRows.concat(state.rows);
+
+    const boothGroups = {};
+    combined.forEach((r, idx)=>{
+      if(r.meetBooth && r.meetStart && r.meetEnd){
+        (boothGroups[r.meetBooth] = boothGroups[r.meetBooth] || []).push({start:r.meetStart, end:r.meetEnd, name:r.name || `行${idx+1}`});
+      }
+    });
+    Object.entries(boothGroups).forEach(([booth, list])=>{
+      for(let i=0;i<list.length;i++){
+        for(let j=i+1;j<list.length;j++){
+          if(timeRangesOverlap(list[i].start,list[i].end,list[j].start,list[j].end)){
+            conflicts.push(`特典会ブース「${booth}」: ${list[i].name}(${list[i].start}-${list[i].end}) と ${list[j].name}(${list[j].start}-${list[j].end}) の時間が重複しています`);
+          }
+        }
+      }
+    });
+
+    const roomGroups = {};
+    combined.forEach((r, idx)=>{
+      if(r.dressingRoom){
+        const inT = r.dressingIn || r.start;
+        const outT = r.dressingOut || r.end;
+        if(inT && outT){
+          (roomGroups[r.dressingRoom] = roomGroups[r.dressingRoom] || []).push({start:inT, end:outT, name:r.name || `行${idx+1}`});
+        }
+      }
+    });
+    Object.entries(roomGroups).forEach(([room, list])=>{
+      for(let i=0;i<list.length;i++){
+        for(let j=i+1;j<list.length;j++){
+          if(timeRangesOverlap(list[i].start,list[i].end,list[j].start,list[j].end)){
+            conflicts.push(`楽屋「${room}」: ${list[i].name}(${list[i].start}-${list[i].end}) と ${list[j].name}(${list[j].start}-${list[j].end}) の時間が重複しています`);
+          }
+        }
+      }
+    });
+    return conflicts;
+  }
+
+  function checkTimeContradictions(){
+    const issues = [];
+    const combined = state.preRows.concat(state.rows);
+    combined.forEach((r, idx)=>{
+      const label = r.name || `行${idx+1}`;
+
+      const sm = timeToMinutes(r.start), em = timeToMinutes(r.end);
+      const dur = parseInt(r.duration, 10);
+      if(sm != null && em != null && !isNaN(dur)){
+        let diff = em - sm;
+        if(diff < 0) diff += 1440;
+        if(diff !== dur){
+          issues.push(`${label}: 開始${r.start}〜終了${r.end}（実際は${diff}分）が持ち時間${dur}分と一致していません`);
+        }
+      }
+
+      const mgs = timeToMinutes(r.meetStart), mge = timeToMinutes(r.meetEnd);
+      const mgDur = parseInt(r.meetDurationMin, 10);
+      if(mgs != null && mge != null && !isNaN(mgDur)){
+        let diff2 = mge - mgs;
+        if(diff2 < 0) diff2 += 1440;
+        if(diff2 !== mgDur){
+          issues.push(`${label}: 特典会${r.meetStart}〜${r.meetEnd}（実際は${diff2}分）が物販時間${mgDur}分と一致していません`);
+        }
+      }
+    });
+    return issues;
+  }
+
+  function renderConflicts(){
+    const box = document.getElementById('conflictWarnings');
+    const issues = checkConflicts().concat(checkTimeContradictions());
+    if(issues.length === 0){ box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = 'block';
+    box.innerHTML = '<strong>⚠ 確認が必要な項目があります</strong>' + issues.map(c=>escapeHtml(c)).join('<br>');
+  }
+
+  // ---------- OPEN synthetic row ----------
+  function buildOpenRow(){
+    const openT = val('f_openTime'), startT = val('f_startTime');
+    if(!openT || !startT) return null;
+    const row = blankRow();
+    row.name = 'OPEN';
+    row.start = openT;
+    row.end = startT;
+    const om = timeToMinutes(openT), sm = timeToMinutes(startT);
+    if(om != null && sm != null){ row.duration = String(sm - om); }
+    row._isOpen = true;
+    return row;
+  }
+
+  function getDisplayRows(){
+    const openRow = state.showOpenRow ? buildOpenRow() : null;
+    const list = [];
+    state.preRows.forEach(r=>{ if(rowHasData(r)) list.push(r); });
+    if(openRow) list.push(openRow);
+    state.rows.forEach(r=>{ if(rowHasData(r)) list.push(r); });
+    return list;
+  }
+
+  // ---------- preview rendering ----------
+  function isColUsed(col){
+    const combined = state.preRows.concat(state.rows);
+    if(col.used) return combined.some(r=> col.used(r));
+    return combined.some(r=>{
+      const v = r[col.key];
+      return col.type === 'checkbox' ? v === true : (v !== '' && v != null);
+    });
+  }
+
+  function buildVenueHtml(){
+    const name = val('f_venueName');
+    const address = val('f_venueAddress');
+    if(!name) return '';
+    let html = escapeHtml(name);
+    if(address){
+      html += '\n' + escapeHtml(address);
+      html += '\n<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address) + '" target="_blank">📍 Googleマップで確認</a>';
+    }
+    return html;
+  }
+
+  function renderPreview(){
+    renderOpenRowHint();
+
+    document.getElementById('p_title').textContent = val('f_title') || '（タイトル未入力）';
+
+    const meta = [];
+    const dateJP = formatDateJP(val('f_date'));
+    if(dateJP) meta.push(['日程', dateJP]);
+
+    const venueHtml = buildVenueHtml();
+    if(venueHtml) meta.push(['会場', venueHtml, true]);
+
+    const openT = val('f_openTime'), startT = val('f_startTime');
+    const timeParts = [];
+    if(openT) timeParts.push('OPEN ' + openT);
+    if(startT) timeParts.push('START ' + startT);
+    if(timeParts.length) meta.push(['時間', timeParts.join(' / ')]);
+
+    const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> `${p.label ? p.label+'：' : ''}${p.amount}`);
+    if(priceLines.length) meta.push(['価格', priceLines.join('\n')]);
+
+    const ticketLines = state.tickets.filter(t=>t.url).map(t=>{
+      const labelPart = t.label ? escapeHtml(t.label)+': ' : '';
+      return `${labelPart}<a href="${escapeAttr(t.url)}" target="_blank">${escapeHtml(t.url)}</a>`;
+    });
+    if(ticketLines.length) meta.push(['チケット', ticketLines.join('\n'), true]);
+
+    const announceJP = formatDateTimeShortJP(val('f_announce'));
+    if(announceJP) meta.push(['告知解禁', announceJP]);
+    const saleJP = formatDateTimeShortJP(val('f_sale'));
+    if(saleJP) meta.push(['販売開始', saleJP]);
+
+    const performersLine = state.performers.filter(Boolean).join(' / ');
+    if(performersLine) meta.push(['出演者', performersLine]);
+
+    const links = val('f_links').split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{
+      const idx = l.indexOf(':');
+      if(idx===-1) return {label:l, url:''};
+      return {label:l.slice(0,idx).trim(), url:l.slice(idx+1).trim()};
+    });
+    if(links.length){
+      const linkHtml = links.map(l=> l.url ? `${escapeHtml(l.label)}: <a href="${escapeAttr(l.url)}" target="_blank">${escapeHtml(l.url)}</a>` : escapeHtml(l.label)).join('\n');
+      meta.push(['参考URL', linkHtml, true]);
+    }
+
+    document.getElementById('metaGrid').innerHTML = meta.map(([k,v,isHtml])=>`<dt>${escapeHtml(k)}</dt><dd>${isHtml ? v : escapeHtml(v)}</dd>`).join('');
+
+    const overviewLines = val('f_overview').split('\n').map(s=>s.trim()).filter(Boolean);
+    const overviewSection = document.getElementById('overviewSection');
+    overviewSection.style.display = overviewLines.length ? '' : 'none';
+    if(overviewLines.length) document.getElementById('p_overview').innerHTML = overviewLines.map(l=>`<li>${escapeHtml(l)}</li>`).join('');
+
+    const otherText = val('f_other');
+    const otherSection = document.getElementById('otherSection');
+    otherSection.style.display = otherText ? '' : 'none';
+    if(otherText) document.getElementById('p_other').textContent = otherText;
+
+    const cols = previewColsList();
+    document.getElementById('previewHead').innerHTML = cols.map(c=>`<th>${escapeHtml(c.label)}</th>`).join('');
+    const displayRows = getDisplayRows();
+    if(displayRows.length === 0){
+      document.getElementById('previewBody').innerHTML = `<tr><td colspan="${cols.length}" class="empty-note">タイムテーブルが未入力です</td></tr>`;
+    } else {
+      document.getElementById('previewBody').innerHTML = displayRows.map(r=>{
+        const rowCls = r._isOpen ? ' class="open-row"' : '';
+        return `<tr${rowCls}>` + cols.map(c=>{
+          let v;
+          if(c.compute){ v = c.compute(r); }
+          else if(c.type === 'checkbox'){ v = r[c.key] ? '〇' : ''; }
+          else { v = r[c.key]; }
+          const cls = c.key === 'name' ? ' class="name-cell"' : '';
+          return `<td${cls}>${escapeHtml(v || '')}</td>`;
+        }).join('') + '</tr>';
+      }).join('');
+    }
+
+    renderConflicts();
+    renderShareText();
+  }
+
+  // ---------- share text ----------
+  function buildGreetingLines(title, dateShort){
+    const type = document.getElementById('f_greetingType').value;
+    const titleText = title || '（タイトル未入力）';
+    const lines = [
+      '各位',
+      'いつもお世話になっております。',
+      `この度は${dateShort ? dateShort+' ' : ''}「${titleText}」にご出演いただきありがとうございます。`
+    ];
+    if(type === 'change'){
+      lines.push('タイムテーブルに変更がございましたので、最新の内容を下記の通り共有いたします。');
+      lines.push('お手数をおかけいたしますが、ご確認のほどよろしくお願いいたします。');
+      lines.push('タイムテーブルの確認後、修正がある場合は〇月〇日(〇)〇〇:〇〇までにご連絡ください。');
+    } else if(type === 'confirm'){
+      lines.push('タイムテーブルがまとまりましたので、下記の通り共有いたします。');
+      lines.push('お忙しいところ恐れ入りますが、ご確認のほどよろしくお願いいたします。');
+      lines.push('タイムテーブルの確認後、修正がある場合は〇月〇日(〇)〇〇:〇〇までにご連絡ください。');
+    } else {
+      lines.push('下記イベント概要・フライヤーでございます。');
+      lines.push('告知協力何卒よろしくお願いいたします。');
+    }
+    return lines;
+  }
+
+  function generateShareText(){
+    const lines = [];
+    const title = val('f_title');
+    const dateShort = formatDateShortJP(val('f_date'));
+
+    buildGreetingLines(title, dateShort).forEach(l => lines.push(l));
+    lines.push('');
+
+    lines.push(`【${title || '（タイトル未入力）'}】`);
+    lines.push('');
+
+    const dateJP = formatDateJP(val('f_date'));
+    if(dateJP) lines.push(`日程：${dateJP}`);
+
+    const venueName = val('f_venueName'), address = val('f_venueAddress');
+    if(venueName) lines.push(`会場：${venueName}${address ? '（'+address+'）' : ''}`);
+
+    const openT = val('f_openTime'), startT = val('f_startTime');
+    const timeParts = [];
+    if(openT) timeParts.push('OPEN ' + openT);
+    if(startT) timeParts.push('START ' + startT);
+    if(timeParts.length) lines.push(`時間：${timeParts.join(' / ')}`);
+
+    const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> `${p.label ? p.label+'：' : ''}${p.amount}`);
+    if(priceLines.length) lines.push(`価格：${priceLines.join(' / ')}`);
+
+    const announceJP = formatDateTimeShortJP(val('f_announce'));
+    if(announceJP) lines.push(`告知解禁：${announceJP}`);
+    const saleJP = formatDateTimeShortJP(val('f_sale'));
+    if(saleJP) lines.push(`販売開始：${saleJP}`);
+
+    const ticketLines = state.tickets.filter(t=>t.url).map(t=> `${t.label ? t.label+' ' : ''}${t.url}`);
+    if(ticketLines.length){
+      lines.push('');
+      lines.push('チケット：');
+      ticketLines.forEach(l=> lines.push(l));
+    }
+
+    const performersLine = state.performers.filter(Boolean).join(' / ');
+    if(performersLine){
+      lines.push('');
+      lines.push(`出演者：${performersLine}`);
+    }
+
+    const overviewLines = val('f_overview').split('\n').map(s=>s.trim()).filter(Boolean);
+    if(overviewLines.length){
+      lines.push('');
+      lines.push('概要：');
+      overviewLines.forEach(l=> lines.push('・' + l));
+    }
+
+    lines.push('');
+    lines.push('―――――――――――');
+    lines.push('タイムテーブル');
+    lines.push('―――――――――――');
+    getDisplayRows().forEach(r=>{
+      let line = `${r.start||''}${r.end ? '-'+r.end : ''}　${r.name||''}`.trim();
+      const merchText = composeMerch(r);
+      if(merchText){
+        line += `　(${merchText})`;
+      }
+      lines.push(line);
+    });
+
+    const otherText = val('f_other');
+    if(otherText){
+      lines.push('');
+      lines.push('その他：');
+      lines.push(otherText);
+    }
+
+    const links = val('f_links').split('\n').map(l=>l.trim()).filter(Boolean);
+    if(links.length){
+      lines.push('');
+      lines.push('参考URL：');
+      links.forEach(l=> lines.push(l));
+    }
+
+    return lines.join('\n');
+  }
+  function renderShareText(){
+    document.getElementById('shareTextArea').value = generateShareText();
+  }
+  document.getElementById('shareTextArea').addEventListener('click', function(){ this.select(); });
+  document.getElementById('copyShareTextBtn').addEventListener('click', async ()=>{
+    const ta = document.getElementById('shareTextArea');
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, 999999);
+    const btn = document.getElementById('copyShareTextBtn');
+    const orig = btn.textContent;
+    try{
+      await navigator.clipboard.writeText(ta.value);
+      btn.textContent = 'コピーしました！';
+    }catch(e){
+      try{
+        document.execCommand('copy');
+        btn.textContent = 'コピーしました！';
+      }catch(e2){
+        btn.textContent = 'コピー失敗（Ctrl+Cで手動コピーしてください）';
+      }
+    }
+    setTimeout(()=>{ btn.textContent = orig; }, 1800);
+  });
+  document.getElementById('openLineBtn').addEventListener('click', ()=>{
+    const text = document.getElementById('shareTextArea').value;
+    const lineUrl = 'line://msg/text/' + encodeURIComponent(text);
+    window.location.href = lineUrl;
+  });
+
+  // ---------- artist photo auto-sort (Chrome/Edge desktop only) ----------
+  let photoSourceDirHandle = null;
+  let photoDestRootDirHandle = null;
+
+  if(!window.showDirectoryPicker){
+    document.getElementById('photoSortUnsupported').style.display = '';
+    document.getElementById('photoSortControls').style.display = 'none';
+  } else {
+    document.getElementById('pickSourceFolderBtn').addEventListener('click', async ()=>{
+      try{
+        photoSourceDirHandle = await window.showDirectoryPicker({mode:'read'});
+        document.getElementById('sourceFolderLabel').textContent = `選択済み: ${photoSourceDirHandle.name}`;
+      }catch(e){ /* user cancelled the picker */ }
+    });
+    document.getElementById('pickDestFolderBtn').addEventListener('click', async ()=>{
+      try{
+        photoDestRootDirHandle = await window.showDirectoryPicker({mode:'readwrite'});
+        document.getElementById('destFolderLabel').textContent = `選択済み: ${photoDestRootDirHandle.name}`;
+      }catch(e){ /* user cancelled the picker */ }
+    });
+    document.getElementById('runPhotoSortBtn').addEventListener('click', runPhotoSort);
+  }
+
+  function normalizeForMatch(str){
+    return (str||'').toLowerCase().replace(/[\s\u3000!！?？♡∞★☆♪·・:：\-_,，。.\/／()（）]/g, '');
+  }
+  function sanitizeFolderName(name){
+    return name.replace(/[\\/:*?"<>|]/g, '_').trim() || '概要書';
+  }
+
+  // ---- hiragana / katakana / romaji variant generation ----
+  function hiraganaToKatakana(str){
+    return str.replace(/[\u3041-\u3096]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+  }
+  function katakanaToHiragana(str){
+    return str.replace(/[\u30A1-\u30F6]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+  }
+  const KANA_TO_ROMAJI = {
+    'きゃ':'kya','きゅ':'kyu','きょ':'kyo','しゃ':'sha','しゅ':'shu','しょ':'sho',
+    'ちゃ':'cha','ちゅ':'chu','ちょ':'cho','にゃ':'nya','にゅ':'nyu','にょ':'nyo',
+    'ひゃ':'hya','ひゅ':'hyu','ひょ':'hyo','みゃ':'mya','みゅ':'myu','みょ':'myo',
+    'りゃ':'rya','りゅ':'ryu','りょ':'ryo','ぎゃ':'gya','ぎゅ':'gyu','ぎょ':'gyo',
+    'じゃ':'ja','じゅ':'ju','じょ':'jo','びゃ':'bya','びゅ':'byu','びょ':'byo',
+    'ぴゃ':'pya','ぴゅ':'pyu','ぴょ':'pyo',
+    'あ':'a','い':'i','う':'u','え':'e','お':'o',
+    'か':'ka','き':'ki','く':'ku','け':'ke','こ':'ko',
+    'さ':'sa','し':'shi','す':'su','せ':'se','そ':'so',
+    'た':'ta','ち':'chi','つ':'tsu','て':'te','と':'to',
+    'な':'na','に':'ni','ぬ':'nu','ね':'ne','の':'no',
+    'は':'ha','ひ':'hi','ふ':'fu','へ':'he','ほ':'ho',
+    'ま':'ma','み':'mi','む':'mu','め':'me','も':'mo',
+    'や':'ya','ゆ':'yu','よ':'yo',
+    'ら':'ra','り':'ri','る':'ru','れ':'re','ろ':'ro',
+    'わ':'wa','を':'wo','ん':'n',
+    'が':'ga','ぎ':'gi','ぐ':'gu','げ':'ge','ご':'go',
+    'ざ':'za','じ':'ji','ず':'zu','ぜ':'ze','ぞ':'zo',
+    'だ':'da','ぢ':'ji','づ':'zu','で':'de','ど':'do',
+    'ば':'ba','び':'bi','ぶ':'bu','べ':'be','ぼ':'bo',
+    'ぱ':'pa','ぴ':'pi','ぷ':'pu','ぺ':'pe','ぽ':'po',
+    'ー':'-','っ':'','ぁ':'a','ぃ':'i','ぅ':'u','ぇ':'e','ぉ':'o','ゃ':'ya','ゅ':'yu','ょ':'yo'
+  };
+  function kanaToRomaji(str){
+    const chars = Array.from(str);
+    let result = '', i = 0;
+    while(i < chars.length){
+      const two = chars[i] + (chars[i+1] || '');
+      if(KANA_TO_ROMAJI[two] !== undefined){ result += KANA_TO_ROMAJI[two]; i += 2; continue; }
+      const one = chars[i];
+      result += (KANA_TO_ROMAJI[one] !== undefined) ? KANA_TO_ROMAJI[one] : one;
+      i += 1;
+    }
+    return result;
+  }
+  function buildNameVariants(name){
+    const base = (name || '').trim();
+    if(!base) return [];
+    const hira = katakanaToHiragana(base);
+    const kata = hiraganaToKatakana(base);
+    const romaji = kanaToRomaji(hira); // kanji/alphabet pass through unchanged
+    const raw = [base, hira, kata, romaji];
+    const normed = raw.map(normalizeForMatch).filter(v => v.length >= 2);
+    return [...new Set(normed)];
+  }
+
+  // ---- fuzzy similarity fallback (longest common substring ratio) ----
+  function similarity(a, b){
+    if(!a || !b) return 0;
+    let longest = 0;
+    for(let i=0;i<a.length;i++){
+      for(let j=i+2;j<=a.length;j++){
+        const sub = a.slice(i,j);
+        if(sub.length > longest && b.includes(sub)) longest = sub.length;
+      }
+    }
+    return longest / Math.max(a.length, b.length);
+  }
+
+  function findCandidates(imageFiles, performerName){
+    const variants = buildNameVariants(performerName);
+    if(variants.length === 0) return {tier:'none', files:[]};
+
+    const exact = imageFiles.filter(f=>{
+      const fn = normalizeForMatch(f.name);
+      return variants.some(v => fn.includes(v));
+    });
+    if(exact.length) return {tier:'exact', files:exact};
+
+    const FUZZY_THRESHOLD = 0.55;
+    const scored = imageFiles.map(f=>{
+      const fn = normalizeForMatch(f.name);
+      const best = Math.max(...variants.map(v => similarity(v, fn)));
+      return {file:f, score:best};
+    }).filter(s => s.score >= FUZZY_THRESHOLD).sort((a,b)=> b.score - a.score);
+    return {tier:'fuzzy', files: scored.map(s=>s.file)};
+  }
+
+  async function listImageFilesRecursive(dirHandle, path){
+    path = path || '';
+    const files = [];
+    for await (const [name, handle] of dirHandle.entries()){
+      if(handle.kind === 'file'){
+        if(/\.(jpe?g|png|gif|webp|heic|bmp)$/i.test(name)){
+          files.push({name, handle, path: path + name});
+        }
+      } else if(handle.kind === 'directory'){
+        const sub = await listImageFilesRecursive(handle, path + name + '/');
+        files.push(...sub);
+      }
+    }
+    return files;
+  }
+
+  async function runPhotoSort(){
+    const statusEl = document.getElementById('photoSortStatus');
+    const resultsEl = document.getElementById('photoSortResults');
+    if(!photoSourceDirHandle || !photoDestRootDirHandle){
+      statusEl.textContent = '写真フォルダと保存先フォルダの両方を選択してください';
+      statusEl.className = 'geo-status error';
+      return;
+    }
+    const title = val('f_title') || '概要書';
+    const dateStr = document.getElementById('f_date').value;
+    const folderName = sanitizeFolderName(dateStr ? `${dateStr}_${title}` : title);
+
+    statusEl.textContent = '写真を検索しています…';
+    statusEl.className = 'geo-status loading';
+    resultsEl.innerHTML = '';
+
+    try{
+      const imageFiles = await listImageFilesRecursive(photoSourceDirHandle);
+      const newDirHandle = await photoDestRootDirHandle.getDirectoryHandle(folderName, {create:true});
+      const performers = state.performers.filter(Boolean);
+
+      if(performers.length === 0){
+        statusEl.textContent = '出演者が未入力です。出演者欄を入力してから実行してください。';
+        statusEl.className = 'geo-status error';
+        return;
+      }
+
+      const report = [];
+      let totalCopied = 0;
+
+      for(const performer of performers){
+        const {tier, files:candidates} = findCandidates(imageFiles, performer);
+        if(candidates.length === 0){
+          report.push({performer, status:'notfound'});
+          continue;
+        }
+
+        // 候補が複数ある場合は更新日時が最新の1枚を採用
+        const withMeta = await Promise.all(candidates.map(async c=>{
+          const file = await c.handle.getFile();
+          return {name:c.name, handle:c.handle, file, lastModified:file.lastModified};
+        }));
+        withMeta.sort((a,b)=> b.lastModified - a.lastModified);
+        const chosen = withMeta[0];
+
+        try{
+          const destHandle = await newDirHandle.getFileHandle(chosen.name, {create:true});
+          const writable = await destHandle.createWritable();
+          await writable.write(await chosen.file.arrayBuffer());
+          await writable.close();
+          totalCopied++;
+          report.push({
+            performer,
+            status: tier === 'exact' ? 'found' : 'probable',
+            file: chosen.name,
+            candidateCount: candidates.length
+          });
+        }catch(err){
+          report.push({performer, status:'error', message: err.message});
+        }
+      }
+
+      // 現在の出演者リストと一致しないファイルはフォルダ内から削除し、常に最新の出演者リストに同期する
+      const keepNames = new Set(report.filter(r => r.file).map(r => r.file));
+      const staleRemoved = [];
+      for await (const [name, handle] of newDirHandle.entries()){
+        if(handle.kind === 'file' && !keepNames.has(name)){
+          try{
+            await newDirHandle.removeEntry(name);
+            staleRemoved.push(name);
+          }catch(e){ /* 削除に失敗した場合は無視して続行 */ }
+        }
+      }
+
+      statusEl.textContent = `完了：「${folderName}」フォルダに ${totalCopied}枚コピーしました。${staleRemoved.length ? `（不要ファイル ${staleRemoved.length}件を削除）` : ''}`;
+      statusEl.className = 'geo-status success';
+
+      resultsEl.innerHTML = report.map(r=>{
+        if(r.status === 'notfound'){
+          return `<div class="photo-report-row not-found">⚠ ${escapeHtml(r.performer)}：該当する写真が見つかりませんでした</div>`;
+        }
+        if(r.status === 'error'){
+          return `<div class="photo-report-row not-found">⚠ ${escapeHtml(r.performer)}：コピー失敗（${escapeHtml(r.message)}）</div>`;
+        }
+        const multiNote = r.candidateCount > 1 ? `／候補${r.candidateCount}件中、最新の更新日時のものを採用` : '';
+        if(r.status === 'probable'){
+          return `<div class="photo-report-row">🤔 ${escapeHtml(r.performer)}：完全一致なし、類似ファイルを採用 → ${escapeHtml(r.file)}${multiNote}</div>`;
+        }
+        return `<div class="photo-report-row">✔ ${escapeHtml(r.performer)}：${escapeHtml(r.file)}${multiNote}</div>`;
+      }).join('') + (staleRemoved.length
+        ? `<div class="photo-report-row not-found">🗑 出演者リストに含まれないため削除：${escapeHtml(staleRemoved.join('、'))}</div>`
+        : '');
+
+    }catch(err){
+      statusEl.textContent = '処理に失敗しました: ' + err.message;
+      statusEl.className = 'geo-status error';
+    }
+  }
+
+  // ---------- PDF export ----------
+  document.getElementById('exportBtn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('exportBtn');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '生成中...';
+    try{
+      const sheet = document.getElementById('sheet');
+      const canvas = await html2canvas(sheet, {scale:2, backgroundColor:'#f7f4ec', useCORS:true});
+      const imgData = canvas.toDataURL('image/png');
+      const { jsPDF } = window.jspdf;
+      const pdfW = canvas.width * 0.75;
+      const pdfH = canvas.height * 0.75;
+      const pdf = new jsPDF({orientation: pdfW > pdfH ? 'landscape' : 'portrait', unit:'pt', format:[pdfW, pdfH]});
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+      const title = val('f_title') || '概要書';
+      const dateStr = document.getElementById('f_date').value;
+      const filename = dateStr ? `${dateStr}_${title}.pdf` : `${title}.pdf`;
+      pdf.save(filename);
+    }catch(err){
+      alert('PDFの生成に失敗しました: ' + err.message);
+    }finally{
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  });
+
+  // ---------- initial load ----------
+  (async function init(){
+    const saved = await loadSavedAddressBook();
+    addressBook = Object.assign({}, SEED_VENUES, saved);
+    renderPerformersForm();
+    renderPricesForm();
+    renderTicketsForm();
+    renderRowsForm();
+    updateMapLink();
+    renderPreview();
+  })();
+})();
+</script>
+</body>
+</html>
