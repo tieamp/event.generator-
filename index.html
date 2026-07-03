@@ -448,6 +448,7 @@
         <div class="hint">出演者欄のアーティスト名とファイル名を、記号・スペースを無視した部分一致で照合します。誤検出・見逃しがないか、最後に必ずコピー先フォルダをご確認ください。</div>
         <div class="hint">再実行すると、その時点の出演者リストに合わせてフォルダの中身も同期されます（出演者が減った場合は該当ファイルを削除、増えた場合は追加、写真が更新されていれば新しいものに置き換え）。このフォルダに手動で入れた無関係なファイルも削除対象になるのでご注意ください。</div>
         <div class="hint">マイク本数推定は、コピーした写真から顔検出AIで人数を数え、タイムテーブルの「マイク」欄が空欄の場合のみ参考値として入力します。集合写真の写り方によっては数え間違いが起きるため、必ず最終確認をしてください（すでに入力済みの欄は上書きしません）。</div>
+        <div class="hint">⚠ この顔検出AIは実写の人物を想定して作られています。イラスト・ロゴ・文字入りのフライヤー風画像では誤検出が多くなりやすく、精度は保証できません。閾値は厳しめに設定していますが、実写以外のアー写では参考程度にとどめてください。</div>
       </div>
     </div>
 
@@ -2053,7 +2054,7 @@
       blazefaceModelPromise = (async ()=>{
         await loadScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs');
         await loadScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface');
-        return await blazeface.load();
+        return await blazeface.load({scoreThreshold: 0.9, maxFaces: 12});
       })();
     }
     return blazefaceModelPromise;
