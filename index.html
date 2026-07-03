@@ -39,7 +39,7 @@
     background:var(--amber);padding:2px 8px;border-radius:999px;vertical-align:middle;
   }
 
-  .layout{display:grid;grid-template-columns:440px 6px 1fr;gap:0;min-height:calc(100vh - 68px);}
+  .layout{display:grid;grid-template-columns:720px 6px 1fr;gap:0;min-height:calc(100vh - 68px);}
   @media (max-width:980px){
     .layout{grid-template-columns:1fr;}
     .panel-divider{display:none;}
@@ -246,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v3.1</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v3.4</span></h1>
   </div>
 </div>
 
@@ -413,8 +413,9 @@
           <option value="announce" selected>①告知協力依頼（初回案内）</option>
           <option value="change">②タイムテーブル変更のお知らせ</option>
           <option value="confirm">③タイムテーブル確定のご確認依頼</option>
+          <option value="invite">④出演のお誘い（オファー用）</option>
         </select>
-        <div class="hint">②③には「タイムテーブルの確認後、修正がある場合は〇月〇日(〇)〇〇:〇〇までにご連絡ください」の一文が入ります。〇の部分は書き出したテキスト内で直接ご入力ください。</div>
+        <div class="hint">②③には「タイムテーブルの確認後、修正がある場合は〇月〇日(〇)〇〇:〇〇までにご連絡ください」の一文が入ります。④は「〇月〇日(〇)頃までにご回答ください」という一文が入ります。〇の部分は書き出したテキスト内で直接ご入力ください。</div>
       </div>
       <textarea id="shareTextArea" readonly></textarea>
       <div class="geo-btn-row" style="margin-top:8px;">
@@ -1779,6 +1780,17 @@
   function buildGreetingLines(title, dateShort){
     const type = document.getElementById('f_greetingType').value;
     const titleText = title || '（タイトル未入力）';
+
+    if(type === 'invite'){
+      const venueName = val('f_venueName');
+      const lines = ['いつもお世話になっております。'];
+      lines.push(`この度は${dateShort ? dateShort+' ' : ''}「${titleText}」への出演について、ご相談のご連絡です。`);
+      if(venueName) lines.push(`${venueName}にて開催予定のイベントとなります。`);
+      lines.push('ご都合よろしければ、ぜひご出演をご検討いただけますと幸いです。');
+      lines.push('恐れ入りますが、〇月〇日(〇)頃までにご回答いただけますと助かります。');
+      return lines;
+    }
+
     const lines = [
       '各位',
       'いつもお世話になっております。',
@@ -2191,7 +2203,7 @@
     const layout = document.getElementById('mainLayout');
     const divider = document.getElementById('panelDivider');
     if(!layout || !divider) return;
-    const DEFAULT_COLS = '440px 6px 1fr';
+    const DEFAULT_COLS = '720px 6px 1fr';
     const MIN_W = 300, MAX_W = 900;
     let dragging = false;
 
