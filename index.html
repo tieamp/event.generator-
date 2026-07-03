@@ -71,7 +71,7 @@
   .preview-panel{background:#0f0e12;padding:28px;overflow:auto;display:flex;justify-content:center;align-items:flex-start;}
 
   .field-group{
-    margin-bottom:16px;background:#201f26;border:3px solid var(--amber);border-left-width:7px;border-radius:10px;
+    margin-bottom:16px;background:#201f26;border:3px solid var(--amber);border-radius:10px;
     padding:16px 16px 18px;box-shadow:0 2px 10px rgba(0,0,0,.3);
   }
   .field-group h2{
@@ -98,6 +98,26 @@
   .performer-input.is-matched{
     background:rgba(63,125,79,.22);border-color:var(--ok);color:#eafff0;
   }
+  .offer-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
+  .offer-row input{flex:1;}
+  .offer-row.is-declined input{
+    background:rgba(177,70,47,.15);border-color:var(--danger);color:#e8b3a6;
+  }
+  .offer-btn-ok{
+    background:var(--ok);color:#fff;border:none;width:36px;height:26px;border-radius:5px;font-size:11px;font-weight:800;flex-shrink:0;
+  }
+  .offer-btn-ok:hover{background:#4d9963;}
+  .offer-btn-ng{
+    background:transparent;border:1px solid var(--danger);color:#ff9d86;width:36px;height:26px;border-radius:5px;font-size:11px;font-weight:800;flex-shrink:0;
+  }
+  .offer-btn-ng:hover{background:rgba(177,70,47,.2);}
+  .offer-ng-badge{
+    color:var(--danger);font-size:10.5px;font-weight:800;white-space:nowrap;flex-shrink:0;padding:0 4px;
+  }
+  .offer-btn-undo{
+    background:transparent;border:1px solid #3a3841;color:#b9b4a6;padding:0 8px;height:26px;border-radius:5px;font-size:10.5px;flex-shrink:0;
+  }
+  .offer-btn-undo:hover{border-color:var(--amber);color:var(--amber);}
   .rowbtns{display:flex;gap:4px;flex-shrink:0;}
   .icon-btn{
     background:#2a2830;border:1px solid #3a3841;color:#e9e6dd;width:24px;height:24px;border-radius:5px;font-size:12px;line-height:1;
@@ -239,6 +259,20 @@
       </div>
       <div class="geo-status" id="savedStatus"></div>
       <div class="hint">お使いの端末にファイルとして保存されます。「PCに保存」でJSONファイルを書き出し、次回「PCから読み込む」でそのファイルを選ぶと、入力内容が復元されます。</div>
+
+      <div class="geo-btn-row" style="margin-top:10px;">
+        <button type="button" id="pickJsonFolderBtn" class="btn-outline">📅 日付から探して読み込む</button>
+      </div>
+      <div id="jsonDateSearchArea" style="display:none;margin-top:8px;">
+        <div class="field">
+          <label>日付を選択</label>
+          <input type="date" id="jsonSearchDate">
+        </div>
+        <button type="button" class="add-row-btn" id="jsonSearchDateBtn">この日付のJSONを検索して読み込む</button>
+        <div id="jsonSearchResults" style="margin-top:8px;font-size:11.5px;line-height:1.6;"></div>
+      </div>
+      <div class="hint" id="jsonFolderUnsupported" style="display:none;color:var(--danger);">お使いのブラウザはこの機能に対応していません。PC版のChromeまたはEdgeでお試しください。</div>
+      <div class="hint">バックアップ用JSONファイルをまとめて保存しているフォルダを選ぶと、日付を指定するだけで該当するファイルを検索して読み込めます（同じ日付に複数ある場合は一覧から選べます）。</div>
     </div>
 
     <div class="field-group">
@@ -309,11 +343,18 @@
     </div>
 
     <div class="field-group">
-      <h2>出演者</h2>
+      <h2>オファー管理</h2>
+      <div class="hint">出演をオファー中のグループを管理します。「OK」で下の出演者欄（確定）に自動追加、「NG」を押すとオファー不可として記録され、誤って同じグループへ重複オファーするのを防げます。</div>
+      <div id="offersList"></div>
+      <button type="button" class="add-mini-btn" id="addOfferBtn">＋ オファー中グループを追加</button>
+    </div>
+
+    <div class="field-group">
+      <h2>出演者（確定）</h2>
       <div id="performersList"></div>
       <button type="button" class="add-mini-btn" id="addPerformerBtn">＋ 出演者を追加</button>
       <button type="button" class="quick-add" id="autoPerformers">タイムテーブルから自動生成</button>
-      <div class="hint">「Krown Krown / ちょこみんと / POLARiS」のように「/」区切りで入力・貼り付けすると、自動的に複数行に分割されます（Enterキーでも分割できます）。</div>
+      <div class="hint">「グットクルー / スイモアマイモン！ / aaaaa / bbbbb」のように「/」区切りで入力・貼り付けすると、自動的に複数行に分割されます（Enterキーでも分割できます）。</div>
       <div class="hint">入力欄が緑色にハイライトされている出演者は、タイムテーブルにも同じ名前で入力されています（名前が完全一致した場合のみハイライトされます）。</div>
     </div>
 
@@ -327,7 +368,7 @@
     </div>
 
     <div class="field-group">
-      <button type="button" class="add-row-btn" id="openAutoGenModalBtn">🪄 自動タイムテーブル生成</button>
+      <button type="button" class="add-row-btn" id="openAutoGenModalBtn">🪄 タイムテーブル案 自動生成</button>
       <div class="hint">開場・開演時間（基本情報欄で入力済みのもの）と、主催入り時刻などを入力すると、組数を自動計算してタイムテーブルを一括生成します。</div>
     </div>
 
@@ -342,7 +383,7 @@
           <tbody id="preRowsBody"></tbody>
         </table>
       </div>
-      <button type="button" class="add-mini-btn" id="addPreRowBtn">＋ 主催者入り/リハ枠を追加（OPENより前）</button>
+      <button type="button" class="add-mini-btn" id="addPreRowBtn">＋OPEN前のタイムを追加（主催入り/リハなど）</button>
 
       <div class="open-hint-box" id="openRowHint">
         <span id="openRowHintText"></span>
@@ -386,16 +427,17 @@
 
     <div class="field-group">
       <h2>アーティスト写真の自動仕分け</h2>
+      <div class="hint">大量のアーティスト写真フォルダから、出演者欄に入力した名前と一致する写真だけを探し出し、「日付_イベントタイトル」フォルダに自動でコピーする機能です。</div>
       <div id="photoSortUnsupported" class="hint" style="display:none;color:var(--danger);">
         お使いのブラウザはこの機能に対応していません。PC版のChromeまたはEdgeでお試しください（Safari・Firefox・iPhone/iPadでは動作しません）。
       </div>
       <div id="photoSortControls">
         <div class="geo-btn-row">
-          <button type="button" id="pickSourceFolderBtn" class="btn-teal">①写真フォルダを選択</button>
+          <button type="button" id="pickSourceFolderBtn" class="btn-teal">アー写マスターフォルダを選択</button>
         </div>
         <div class="hint" id="sourceFolderLabel">未選択</div>
         <div class="geo-btn-row" style="margin-top:8px;">
-          <button type="button" id="pickDestFolderBtn" class="btn-teal">②保存先フォルダを選択</button>
+          <button type="button" id="pickDestFolderBtn" class="btn-teal">コピー先フォルダを選択</button>
         </div>
         <div class="hint" id="destFolderLabel">未選択</div>
         <button type="button" id="runPhotoSortBtn" class="add-row-btn" style="margin-top:10px;">③出演者名で検索してコピー実行</button>
@@ -441,7 +483,7 @@
 
 <div class="modal-overlay" id="autoGenModalOverlay" style="display:none;">
   <div class="modal-card">
-    <h3>🪄 自動タイムテーブル生成</h3>
+    <h3>🪄 タイムテーブル案 自動生成</h3>
     <div class="hint">開場・開演時間は基本情報欄の値を使います。完全撤収は「最終物販終了の40分後」で固定計算されます。</div>
     <div class="row2">
       <div class="field">
@@ -496,6 +538,7 @@
 
   const state = {
     performers: [''],
+    offers: [],
     prices: [{label:'', amount:''}],
     tickets: [{label:'', url:''}],
     preRows: [],
@@ -763,6 +806,63 @@
     state.performers = uniq.length ? uniq : [''];
     renderPerformersForm();
     renderPreview();
+  });
+
+  // ---------- offers management (オファー中 / 確定 / NG) ----------
+  function renderOffersForm(){
+    const wrap = document.getElementById('offersList');
+    if(state.offers.length === 0){
+      wrap.innerHTML = '<div class="hint">オファー中のグループはありません。</div>';
+      return;
+    }
+    wrap.innerHTML = state.offers.map((o,idx)=>{
+      const declined = o.status === 'declined';
+      const actionsHtml = declined
+        ? `<span class="offer-ng-badge">オファーNG</span><button type="button" class="offer-btn-undo" data-act="undo" data-idx="${idx}">取消</button>`
+        : `<button type="button" class="offer-btn-ok" data-act="ok" data-idx="${idx}" title="確定へ昇格">OK</button><button type="button" class="offer-btn-ng" data-act="ng" data-idx="${idx}" title="オファーNGとして記録">NG</button>`;
+      return `<div class="offer-row${declined ? ' is-declined' : ''}">
+        <input type="text" data-idx="${idx}" class="offer-input" placeholder="オファー中のグループ名" value="${escapeAttr(o.name)}" ${declined ? 'disabled' : ''}>
+        ${actionsHtml}
+        <button type="button" class="icon-btn danger" data-act="del" data-idx="${idx}" title="削除">✕</button>
+      </div>`;
+    }).join('');
+
+    wrap.querySelectorAll('.offer-input').forEach(inp=>{
+      inp.addEventListener('input', e=>{
+        state.offers[+e.target.dataset.idx].name = e.target.value;
+        renderPreview();
+      });
+    });
+    wrap.querySelectorAll('button[data-act]').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        const idx = +e.currentTarget.dataset.idx, act = e.currentTarget.dataset.act;
+        const offer = state.offers[idx];
+        if(act === 'ok'){
+          const name = (offer.name || '').trim();
+          if(name){
+            if(state.performers.length === 1 && !state.performers[0]){
+              state.performers = [name];
+            } else if(!state.performers.some(p => p.trim() === name)){
+              state.performers.push(name);
+            }
+          }
+          state.offers.splice(idx, 1);
+          renderPerformersForm();
+        } else if(act === 'ng'){
+          offer.status = 'declined';
+        } else if(act === 'undo'){
+          offer.status = 'pending';
+        } else if(act === 'del'){
+          state.offers.splice(idx, 1);
+        }
+        renderOffersForm();
+        renderPreview();
+      });
+    });
+  }
+  document.getElementById('addOfferBtn').addEventListener('click', ()=>{
+    state.offers.push({name:'', status:'pending'});
+    renderOffersForm();
   });
 
   // ---------- prices list ----------
@@ -1299,6 +1399,7 @@
     document.getElementById('dateWeekdayHint').textContent = '';
     setGeoStatus('', '');
     state.performers = [''];
+    state.offers = [];
     state.prices = [{label:'',amount:''}];
     state.tickets = [{label:'',url:''}];
     state.preRows = [];
@@ -1307,6 +1408,7 @@
     state.showOpenRow = true;
     setSavedStatus('', '');
     renderPerformersForm();
+    renderOffersForm();
     renderPricesForm();
     renderTicketsForm();
     renderRowsForm();
@@ -1328,6 +1430,7 @@
       overviewAll: document.getElementById('f_overviewAll').value,
       greetingType: document.getElementById('f_greetingType').value,
       performers: state.performers,
+      offers: state.offers,
       prices: state.prices,
       tickets: state.tickets,
       preRows: state.preRows,
@@ -1354,6 +1457,7 @@
     document.getElementById('dateWeekdayHint').textContent = formatDateJP(snap.date || '');
 
     state.performers = (snap.performers && snap.performers.length) ? snap.performers : [''];
+    state.offers = snap.offers || [];
     state.prices = (snap.prices && snap.prices.length) ? snap.prices : [{label:'',amount:''}];
     state.tickets = (snap.tickets && snap.tickets.length) ? snap.tickets : [{label:'',url:''}];
     state.preRows = snap.preRows || [];
@@ -1362,6 +1466,7 @@
     state.showOpenRow = typeof snap.showOpenRow === 'boolean' ? snap.showOpenRow : true;
 
     renderPerformersForm();
+    renderOffersForm();
     renderPricesForm();
     renderTicketsForm();
     renderRowsForm();
@@ -1414,6 +1519,83 @@
     if(file) importEventJSON(file);
     e.target.value = '';
   });
+
+  // ---------- date-based JSON search & load (Chrome/Edge desktop only) ----------
+  let jsonBackupDirHandle = null;
+
+  if(!window.showDirectoryPicker){
+    document.getElementById('jsonFolderUnsupported').style.display = '';
+    document.getElementById('pickJsonFolderBtn').disabled = true;
+  } else {
+    document.getElementById('pickJsonFolderBtn').addEventListener('click', async ()=>{
+      try{
+        jsonBackupDirHandle = await window.showDirectoryPicker({mode:'read'});
+        document.getElementById('jsonDateSearchArea').style.display = '';
+        setSavedStatus(`フォルダ「${jsonBackupDirHandle.name}」を選択しました。日付を指定して検索してください。`, 'success');
+      }catch(e){ /* user cancelled the picker */ }
+    });
+    document.getElementById('jsonSearchDateBtn').addEventListener('click', searchAndLoadJsonByDate);
+  }
+
+  async function listJsonFilesRecursive(dirHandle, path){
+    path = path || '';
+    const files = [];
+    for await (const [name, handle] of dirHandle.entries()){
+      if(handle.kind === 'file'){
+        if(/\.json$/i.test(name)) files.push({name, handle, path: path + name});
+      } else if(handle.kind === 'directory'){
+        const sub = await listJsonFilesRecursive(handle, path + name + '/');
+        files.push(...sub);
+      }
+    }
+    return files;
+  }
+
+  async function loadJsonFileHandle(fileHandle){
+    const file = await fileHandle.getFile();
+    const text = await file.text();
+    const snap = JSON.parse(text);
+    applySnapshot(snap);
+    setSavedStatus(`「${snap.title || '（無題）'}」を読み込みました。`, 'success');
+    document.getElementById('jsonSearchResults').innerHTML = '';
+  }
+
+  async function searchAndLoadJsonByDate(){
+    const resultsEl = document.getElementById('jsonSearchResults');
+    resultsEl.innerHTML = '';
+    if(!jsonBackupDirHandle){
+      setSavedStatus('先にフォルダを選択してください。', 'error');
+      return;
+    }
+    const dateVal = document.getElementById('jsonSearchDate').value;
+    if(!dateVal){
+      setSavedStatus('日付を選択してください。', 'error');
+      return;
+    }
+    setSavedStatus('検索しています…', 'loading');
+    try{
+      const allJson = await listJsonFilesRecursive(jsonBackupDirHandle);
+      const matches = allJson.filter(f => f.name.startsWith(dateVal));
+      if(matches.length === 0){
+        setSavedStatus(`${dateVal} のJSONファイルが見つかりませんでした。`, 'error');
+      } else if(matches.length === 1){
+        await loadJsonFileHandle(matches[0].handle);
+      } else {
+        setSavedStatus(`${matches.length}件見つかりました。読み込むファイルを選んでください。`, 'info');
+        resultsEl.innerHTML = matches.map((m, i)=>
+          `<button type="button" class="quick-add" data-idx="${i}" style="display:block;width:100%;text-align:left;margin-top:4px;">${escapeHtml(m.name)}</button>`
+        ).join('');
+        resultsEl.querySelectorAll('button[data-idx]').forEach(btn=>{
+          btn.addEventListener('click', async ()=>{
+            const m = matches[+btn.dataset.idx];
+            await loadJsonFileHandle(m.handle);
+          });
+        });
+      }
+    }catch(err){
+      setSavedStatus('検索に失敗しました: ' + err.message, 'error');
+    }
+  }
 
 
   function timeRangesOverlap(aStart, aEnd, bStart, bEnd){
@@ -1487,6 +1669,10 @@
         if(diff2 !== mgDur){
           issues.push(`${label}: 特典会${r.meetStart}〜${r.meetEnd}（実際は${diff2}分）が物販時間${mgDur}分と一致していません`);
         }
+      }
+
+      if(r.start && r.end && r.meetStart && r.meetEnd && timeRangesOverlap(r.start, r.end, r.meetStart, r.meetEnd)){
+        issues.push(`${label}: 出演時間(${r.start}-${r.end})と自身の特典会時間(${r.meetStart}-${r.meetEnd})が重複しています`);
       }
     });
     return issues;
@@ -1699,6 +1885,15 @@
     if(performersLine){
       lines.push('');
       lines.push(`出演者：${performersLine}`);
+    }
+
+    const pendingOfferLine = state.offers
+      .filter(o => o.status !== 'declined' && o.name && o.name.trim())
+      .map(o => o.name.trim())
+      .join(' / ');
+    if(pendingOfferLine){
+      lines.push('');
+      lines.push(`オファー中：${pendingOfferLine}`);
     }
 
     const overviewLines = val('f_overviewAll').split('\n').map(s=>s.trim()).filter(Boolean);
@@ -2072,6 +2267,7 @@
     const saved = await loadSavedAddressBook();
     addressBook = Object.assign({}, SEED_VENUES, saved);
     renderPerformersForm();
+    renderOffersForm();
     renderPricesForm();
     renderTicketsForm();
     renderRowsForm();
