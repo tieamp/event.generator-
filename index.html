@@ -6,6 +6,7 @@
 <title>イベント制作 ジェネレーター</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
     --ink:#16151a;
@@ -246,7 +247,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.0</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.1</span></h1>
   </div>
 </div>
 
@@ -445,6 +446,13 @@
         <div class="hint">出演者欄のアーティスト名とファイル名を、記号・スペースを無視した部分一致で照合します。誤検出・見逃しがないか、最後に必ずコピー先フォルダをご確認ください。</div>
         <div class="hint">再実行すると、その時点の出演者リストに合わせてフォルダの中身も同期されます（出演者が減った場合は該当ファイルを削除、増えた場合は追加、写真が更新されていれば新しいものに置き換え）。このフォルダに手動で入れた無関係なファイルも削除対象になるのでご注意ください。</div>
       </div>
+    </div>
+
+    <div class="field-group">
+      <h2>PDF書き出し（テキスト版・試験的）</h2>
+      <div class="hint">下の「テキスト版PDF」は、画像ではなく本物のPDF文字・クリック可能なリンクとして書き出す試験的な機能です。初回は日本語フォント（数MB）を読み込むため少し時間がかかります。うまく生成できない場合は、通常の「PDFに書き出す」（画像版）をお使いください。</div>
+      <button type="button" id="exportTextPdfBtn" class="add-row-btn">📝 テキスト版PDFを書き出す（試験的）</button>
+      <div class="geo-status" id="textPdfStatus"></div>
     </div>
 
     <div class="actions">
@@ -2141,6 +2149,139 @@
     }finally{
       btn.disabled = false;
       btn.textContent = originalText;
+    }
+  });
+
+  // ---------- text-based PDF export (experimental, embeds real Japanese font) ----------
+  function arrayBufferToBase64(buffer){
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    for(let i = 0; i < bytes.length; i += chunkSize){
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  }
+  let notoFontBase64Promise = null;
+  async function loadJapaneseFontBase64(){
+    if(!notoFontBase64Promise){
+      notoFontBase64Promise = (async ()=>{
+        const res = await fetch('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf');
+        if(!res.ok) throw new Error('フォントの取得に失敗しました（HTTP ' + res.status + '）');
+        const buf = await res.arrayBuffer();
+        return arrayBufferToBase64(buf);
+      })();
+    }
+    return notoFontBase64Promise;
+  }
+
+  document.getElementById('exportTextPdfBtn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('exportTextPdfBtn');
+    const statusEl = document.getElementById('textPdfStatus');
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'フォントを読み込み中…（数MBのため少し時間がかかります）';
+    statusEl.textContent = '';
+    try{
+      const fontBase64 = await loadJapaneseFontBase64();
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({orientation:'portrait', unit:'pt', format:'a4'});
+      pdf.addFileToVFS('NotoSansJP-Regular.otf', fontBase64);
+      pdf.addFont('NotoSansJP-Regular.otf', 'NotoSansJP', 'normal');
+      pdf.setFont('NotoSansJP');
+
+      btn.textContent = 'PDFを生成中…';
+
+      const MARGIN = 40;
+      const pageW = pdf.internal.pageSize.getWidth();
+      let curY = MARGIN;
+
+      pdf.setFontSize(15);
+      pdf.text(val('f_title') || '（タイトル未入力）', MARGIN, curY);
+      curY += 22;
+
+      pdf.setFontSize(9);
+      const metaLines = [];
+      const dateJP = formatDateJP(val('f_date'));
+      if(dateJP) metaLines.push(['日程', dateJP]);
+      const venueName = val('f_venueName'), address = val('f_venueAddress');
+      if(venueName) metaLines.push(['会場', address ? `${venueName}（${address}）` : venueName]);
+      const openT = val('f_openTime'), startT = val('f_startTime');
+      const timeParts = [];
+      if(openT) timeParts.push('OPEN ' + openT);
+      if(startT) timeParts.push('START ' + startT);
+      if(timeParts.length) metaLines.push(['時間', timeParts.join(' / ')]);
+      const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
+      if(priceLines.length) metaLines.push(['価格', priceLines.join(' / ')]);
+      const announceJP = formatDateTimeShortJP(val('f_announce'));
+      if(announceJP) metaLines.push(['告知解禁', announceJP]);
+      const saleJP = formatDateTimeShortJP(val('f_sale'));
+      if(saleJP) metaLines.push(['販売開始', saleJP]);
+      const performersLine = state.performers.filter(Boolean).join(' / ');
+      if(performersLine) metaLines.push(['出演者', performersLine]);
+
+      metaLines.forEach(([label, text])=>{
+        pdf.text(`${label}：${text}`, MARGIN, curY);
+        curY += 14;
+      });
+
+      const tickets = state.tickets.filter(t=>t.url);
+      if(tickets.length){
+        pdf.text('チケット：', MARGIN, curY);
+        curY += 14;
+        tickets.forEach(t=>{
+          const label = t.label ? `${t.label}: ` : '';
+          pdf.text(label, MARGIN + 10, curY);
+          pdf.textWithLink(t.url, MARGIN + 10 + pdf.getTextWidth(label), curY, {url: t.url});
+          curY += 13;
+        });
+      }
+
+      const overviewLines = val('f_overviewAll').split('\n').map(s=>s.trim()).filter(Boolean);
+      if(overviewLines.length){
+        curY += 4;
+        overviewLines.forEach(line=>{
+          const urlMatch = line.match(/^(https?:\/\/\S+)$/);
+          if(urlMatch){
+            pdf.textWithLink('・' + line, MARGIN, curY, {url: urlMatch[1]});
+          } else {
+            pdf.text('・' + line, MARGIN, curY);
+          }
+          curY += 13;
+        });
+      }
+
+      curY += 10;
+
+      const cols = previewColsList();
+      const displayRows = getDisplayRows();
+      const head = [cols.map(c => c.label)];
+      const body = displayRows.map(r => cols.map(c=>{
+        if(c.compute) return c.compute(r) || '';
+        if(c.type === 'checkbox') return r[c.key] ? '〇' : '';
+        return r[c.key] || '';
+      }));
+
+      pdf.autoTable({
+        startY: curY,
+        head, body,
+        styles: { font: 'NotoSansJP', fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [22,21,26], textColor: 255, font: 'NotoSansJP' },
+        margin: { left: MARGIN, right: MARGIN }
+      });
+
+      const title = val('f_title') || '概要書';
+      const dateStr = document.getElementById('f_date').value;
+      const filename = dateStr ? `${dateStr}_${title}_text.pdf` : `${title}_text.pdf`;
+      pdf.save(filename);
+      statusEl.textContent = 'テキスト版PDFを書き出しました。';
+      statusEl.className = 'geo-status success';
+    }catch(err){
+      statusEl.textContent = '生成に失敗しました: ' + err.message + '（「PDFに書き出す」（画像版）をお試しください）';
+      statusEl.className = 'geo-status error';
+    }finally{
+      btn.disabled = false;
+      btn.textContent = orig;
     }
   });
 
