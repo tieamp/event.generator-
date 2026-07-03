@@ -246,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v3.6</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v3.7</span></h1>
   </div>
 </div>
 
@@ -486,8 +486,8 @@
     <div class="hint">開演時間は基本情報欄の値を使います。OPEN以降のライブ・物販枠のみを生成します（OPEN前の主催入り・リハなどは対象外です）。</div>
     <div class="row2">
       <div class="field">
-        <label>ライブ/物販 総時間（分）</label>
-        <input type="text" id="autoGenTotalMin" placeholder="例）180">
+        <label>ライブ/物販 総時間（時間）</label>
+        <input type="text" id="autoGenTotalHours" placeholder="例）3">
       </div>
       <div class="field">
         <label>1組あたりの持ち時間（分）</label>
@@ -1266,17 +1266,18 @@
       setAutoGenStatus('先に基本情報の「開演時間」を入力してください。', 'error');
       return;
     }
-    const totalMin = parseInt(document.getElementById('autoGenTotalMin').value, 10);
+    const totalHours = parseFloat(document.getElementById('autoGenTotalHours').value);
     const performMin = parseInt(document.getElementById('autoGenPerformMin').value, 10);
     const merchMin = parseInt(document.getElementById('autoGenMerchMin').value, 10);
     const merchOffsetMin = parseInt(document.getElementById('autoGenMerchOffsetMin').value, 10);
-    const values = {totalMin, performMin, merchMin, merchOffsetMin};
+    const values = {totalHours, performMin, merchMin, merchOffsetMin};
     for(const k in values){
       if(isNaN(values[k]) || values[k] < 0){
         setAutoGenStatus('すべての項目に0以上の数値を入力してください。', 'error');
         return;
       }
     }
+    const totalMin = Math.round(totalHours * 60);
 
     const startMin = timeToMinutes(startT);
     if(startMin == null){
