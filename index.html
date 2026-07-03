@@ -2047,8 +2047,8 @@
   async function ensureFaceModel(){
     if(!blazefaceModelPromise){
       blazefaceModelPromise = (async ()=>{
-        await loadScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js');
-        await loadScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.1.0/dist/blazeface.min.js');
+        await loadScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs');
+        await loadScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface');
         return await blazeface.load();
       })();
     }
