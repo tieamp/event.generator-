@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>概要書ジェネレーター</title>
+<title>イベント制作 ジェネレーター</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
@@ -33,7 +33,11 @@
     border-bottom:3px solid var(--amber);
   }
   .brand-eyebrow{display:block;font-size:11px;letter-spacing:.18em;color:var(--amber);font-weight:800;margin-bottom:2px;}
-  .brand h1{margin:0;font-size:20px;letter-spacing:.02em;font-weight:800;}
+  .brand h1{margin:0;font-size:20px;letter-spacing:.02em;font-weight:800;display:inline-flex;align-items:center;gap:8px;}
+  .version-badge{
+    font-size:11px;font-weight:800;letter-spacing:.02em;color:var(--ink);
+    background:var(--amber);padding:2px 8px;border-radius:999px;vertical-align:middle;
+  }
 
   .layout{display:grid;grid-template-columns:440px 6px 1fr;gap:0;min-height:calc(100vh - 68px);}
   @media (max-width:980px){
@@ -242,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>概要書ジェネレーター</h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v2.0</span></h1>
   </div>
 </div>
 
