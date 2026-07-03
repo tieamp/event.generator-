@@ -246,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v3.5</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v3.6</span></h1>
   </div>
 </div>
 
@@ -483,21 +483,11 @@
 <div class="modal-overlay" id="autoGenModalOverlay" style="display:none;">
   <div class="modal-card">
     <h3>🪄 タイムテーブル案 自動生成</h3>
-    <div class="hint">開場・開演時間は基本情報欄の値を使います。完全撤収は「最終物販終了の40分後」で固定計算されます。</div>
+    <div class="hint">開演時間は基本情報欄の値を使います。OPEN以降のライブ・物販枠のみを生成します（OPEN前の主催入り・リハなどは対象外です）。</div>
     <div class="row2">
       <div class="field">
-        <label>会場レンタル総時間（時間）</label>
-        <input type="text" id="autoGenRentalHours" placeholder="例）5">
-      </div>
-      <div class="field">
-        <label>主催入り時刻</label>
-        <input type="time" id="autoGenEntryTime">
-      </div>
-    </div>
-    <div class="row2">
-      <div class="field">
-        <label>リハ時間（分）</label>
-        <input type="text" id="autoGenRehearsalMin" placeholder="例）45">
+        <label>ライブ/物販 総時間（分）</label>
+        <input type="text" id="autoGenTotalMin" placeholder="例）180">
       </div>
       <div class="field">
         <label>1組あたりの持ち時間（分）</label>
@@ -519,7 +509,7 @@
       <button type="button" class="btn-teal" id="autoGenerateBtn">この内容で生成</button>
       <button type="button" class="btn-outline" id="closeAutoGenModalBtn">閉じる</button>
     </div>
-    <div class="hint" style="margin-top:10px;">生成されるのは開始・終了・持ち時間・物販時間・楽屋前後の枠のみです。アーティスト名・マイク本数・車両・楽屋番号・撮影可否・備考などは生成後にタイムテーブルへ直接入力してください。既存のタイムテーブルは上書きされます。</div>
+    <div class="hint" style="margin-top:10px;">生成されるのは開始・終了・持ち時間・物販時間の枠のみです。アーティスト名・マイク本数・車両・楽屋番号・撮影可否・備考などは生成後にタイムテーブルへ直接入力してください。OPEN以降の既存のタイムテーブルは上書きされます（OPEN前は変更しません）。</div>
   </div>
 </div>
 
@@ -1271,71 +1261,36 @@
   }
 
   function generateAutoTimetable(){
-    const openT = document.getElementById('f_openTime').value;
     const startT = document.getElementById('f_startTime').value;
-    const entryT = document.getElementById('autoGenEntryTime').value;
-    if(!openT || !startT){
-      setAutoGenStatus('先に基本情報の「開場時間」「開演時間」を入力してください。', 'error');
+    if(!startT){
+      setAutoGenStatus('先に基本情報の「開演時間」を入力してください。', 'error');
       return;
     }
-    if(!entryT){
-      setAutoGenStatus('「主催入り時刻」を入力してください。', 'error');
-      return;
-    }
-    const rentalHours = parseFloat(document.getElementById('autoGenRentalHours').value);
-    const rehearsalMin = parseInt(document.getElementById('autoGenRehearsalMin').value, 10);
+    const totalMin = parseInt(document.getElementById('autoGenTotalMin').value, 10);
     const performMin = parseInt(document.getElementById('autoGenPerformMin').value, 10);
     const merchMin = parseInt(document.getElementById('autoGenMerchMin').value, 10);
     const merchOffsetMin = parseInt(document.getElementById('autoGenMerchOffsetMin').value, 10);
-    const values = {rentalHours, rehearsalMin, performMin, merchMin, merchOffsetMin};
+    const values = {totalMin, performMin, merchMin, merchOffsetMin};
     for(const k in values){
       if(isNaN(values[k]) || values[k] < 0){
         setAutoGenStatus('すべての項目に0以上の数値を入力してください。', 'error');
         return;
       }
     }
-    const rentalMin = Math.round(rentalHours * 60);
 
-    const openMin = timeToMinutes(openT);
     const startMin = timeToMinutes(startT);
-    const entryMin = timeToMinutes(entryT);
-    if(openMin == null || startMin == null || entryMin == null){
-      setAutoGenStatus('開場・開演・主催入りの時刻形式を確認してください。', 'error');
+    if(startMin == null){
+      setAutoGenStatus('開演時間の形式を確認してください。', 'error');
       return;
     }
 
-    const rehearsalStartMin = openMin - rehearsalMin;
-    if(entryMin > rehearsalStartMin){
-      setAutoGenStatus('主催入り時刻が遅すぎます。リハ時間を確保できません（リハ開始予定：' + minutesToTime(rehearsalStartMin) + '）。', 'error');
-      return;
-    }
-
-    const rentalStartMin = entryMin;
-    const rentalEndMin = rentalStartMin + rentalMin;
-    const lastMerchDeadline = rentalEndMin - 40; // 完全撤収は最終物販終了の40分後、固定ルール
-
-    const N = Math.floor((lastMerchDeadline - startMin - merchOffsetMin - merchMin) / performMin);
+    const N = Math.floor((totalMin - merchOffsetMin - merchMin) / performMin);
     if(N < 1){
       setAutoGenStatus('条件を満たす組数が1組も確保できません。時間・持ち時間の数値を見直してください。', 'error');
       return;
     }
 
-    if(!confirm(`${N}組でタイムテーブルを自動生成します。既存のタイムテーブル（開場前・OPEN以降）は上書きされます。よろしいですか？`)) return;
-
-    // 開場前（主催入り・リハ）
-    const entryRow = blankRow();
-    entryRow.name = '主催入り';
-    entryRow.start = minutesToTime(entryMin);
-    entryRow.end = minutesToTime(rehearsalStartMin);
-    entryRow.duration = String(rehearsalStartMin - entryMin);
-
-    const rehearsalRow = blankRow();
-    rehearsalRow.name = 'リハーサル';
-    rehearsalRow.start = minutesToTime(rehearsalStartMin);
-    rehearsalRow.end = minutesToTime(openMin);
-    rehearsalRow.duration = String(rehearsalMin);
-
-    state.preRows = [entryRow, rehearsalRow];
+    if(!confirm(`${N}組でタイムテーブルを自動生成します。OPEN以降の既存のタイムテーブルは上書きされます（OPEN前は変更しません）。よろしいですか？`)) return;
 
     // OPEN以降：バックトゥバックで組数分生成、物販は並行方式で自動計算
     const newRows = [];
@@ -1354,20 +1309,12 @@
     }
     const boothCount = assignMinimalBooths(newRows);
     state.rows = newRows;
-
-    // 完全撤収マーカー行（実際の最終物販終了+40分）
-    const teardownRow = blankRow();
-    teardownRow.name = '完全撤収';
-    teardownRow.start = minutesToTime((lastMerchEndActual != null ? lastMerchEndActual : lastMerchDeadline) + 40);
-    state.rows.push(teardownRow);
-
     state.row0AutoSync = false;
 
     renderRowsForm();
     renderPreview();
 
-    const teardownDisplay = teardownRow.start;
-    setAutoGenStatus(`${N}組で生成しました（物販ブースは重複なしで最小の${boothCount}ブース）。開演${startT}〜最終物販終了${minutesToTime(lastMerchEndActual)}、完全撤収予定${teardownDisplay}。アーティスト名・マイク本数などは各行に入力してください。`, 'success');
+    setAutoGenStatus(`${N}組で生成しました（物販ブースは重複なしで最小の${boothCount}ブース）。開演${startT}〜最終物販終了${minutesToTime(lastMerchEndActual)}。アーティスト名・マイク本数などは各行に入力してください。`, 'success');
   }
   document.getElementById('autoGenerateBtn').addEventListener('click', generateAutoTimetable);
 
