@@ -90,7 +90,7 @@
   }
   select{appearance:auto;}
   textarea{resize:vertical;min-height:56px;line-height:1.5;}
-  .hint{font-size:11px;color:var(--muted);margin-top:3px;}
+  .hint{font-size:11px;color:#a39d8e;margin-top:3px;}
   .weekday-hint{font-size:11.5px;color:var(--amber);margin-top:3px;min-height:14px;}
 
   .list-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
@@ -244,7 +244,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v5.7</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.0</span></h1>
   </div>
 </div>
 
@@ -350,21 +350,21 @@
     </div>
 
     <div class="field-group">
-      <h2>出演者（確定）</h2>
-      <div id="performersList"></div>
-      <button type="button" class="add-mini-btn" id="addPerformerBtn">＋ 出演者を追加</button>
-      <button type="button" class="quick-add" id="autoPerformers">タイムテーブルから自動生成</button>
-      <div class="hint">「グットクルー / スイモアマイモン！ / aaaaa / bbbbb」のように「/」区切りで入力・貼り付けすると、自動的に複数行に分割されます（Enterキーでも分割できます）。</div>
-      <div class="hint">入力欄が緑色にハイライトされている出演者は、タイムテーブルにも同じ名前で入力されています（名前が完全一致した場合のみハイライトされます）。</div>
-    </div>
-
-    <div class="field-group">
       <h2>概要・注意事項・その他</h2>
       <div class="field">
         <label>概要・注意事項・その他（1行=1項目、・で表示されます）</label>
         <textarea id="f_overviewAll" style="min-height:120px;" placeholder="キッチンカー出店あり&#10;一眼レフカメラのみ撮影エリアあり(有料)&#10;【物販手数料】単日出演:5,000円／日&#10;公式サイト: https://example.com"></textarea>
         <div class="hint">URLを含む行は自動的にリンクになります。</div>
       </div>
+    </div>
+
+    <div class="field-group">
+      <h2>出演者（確定）</h2>
+      <div id="performersList"></div>
+      <button type="button" class="add-mini-btn" id="addPerformerBtn">＋ 出演者を追加</button>
+      <button type="button" class="quick-add" id="autoPerformers">タイムテーブルから自動生成</button>
+      <div class="hint">「グットクルー / スイモアマイモン！ / aaaaa / bbbbb」のように「/」区切りで入力・貼り付けすると、自動的に複数行に分割されます（Enterキーでも分割できます）。</div>
+      <div class="hint">入力欄が緑色にハイライトされている出演者は、タイムテーブルにも同じ名前で入力されています（名前が完全一致した場合のみハイライトされます）。</div>
     </div>
 
     <div class="field-group">
@@ -487,7 +487,7 @@
     <div class="hint">開演時間は基本情報欄の値を使います。OPEN以降のライブ・物販枠のみを生成します（OPEN前の主催入り・リハなどは対象外です）。</div>
     <div class="row2">
       <div class="field">
-        <label>ライブ/物販 総時間（時間）</label>
+        <label>ライブ+物販 総時間（時間）</label>
         <input type="text" id="autoGenTotalHours" placeholder="例）3">
       </div>
       <div class="field">
