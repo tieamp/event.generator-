@@ -50,6 +50,23 @@
   }
   .panel-divider:hover::after, .panel-divider.is-dragging::after{background:var(--ink);}
 
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.65);
+    display:flex;align-items:center;justify-content:center;
+    z-index:1000;padding:20px;
+  }
+  .modal-card{
+    background:#1c1b21;color:#e9e6dd;border:1px solid #3a3841;border-radius:12px;
+    padding:24px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;
+    box-shadow:0 20px 60px rgba(0,0,0,.55);
+  }
+  .modal-card h3{margin:0 0 8px;color:var(--amber);font-size:15px;letter-spacing:.02em;}
+
+  .site-footer{
+    text-align:center;padding:14px 20px;font-size:11px;color:var(--muted);
+    background:var(--ink);border-top:1px solid #2a2830;
+  }
+
   .form-panel{background:#1c1b21;color:#e9e6dd;padding:22px;overflow-y:auto;max-height:calc(100vh - 68px);}
   .preview-panel{background:#0f0e12;padding:28px;overflow:auto;display:flex;justify-content:center;align-items:flex-start;}
 
@@ -329,41 +346,8 @@
     </div>
 
     <div class="field-group">
-      <h2>🪄 自動タイムテーブル生成</h2>
-      <div class="hint">開場・開演時間（基本情報欄で入力済みのもの）と、主催入り時刻をもとに、組数を自動計算してタイムテーブルを一括生成します。完全撤収は「最終物販終了の40分後」で固定計算されます。</div>
-      <div class="row2">
-        <div class="field">
-          <label>会場レンタル総時間（時間）</label>
-          <input type="text" id="autoGenRentalHours" placeholder="例）5">
-        </div>
-        <div class="field">
-          <label>主催入り時刻</label>
-          <input type="time" id="autoGenEntryTime">
-        </div>
-      </div>
-      <div class="row2">
-        <div class="field">
-          <label>リハ時間（分）</label>
-          <input type="text" id="autoGenRehearsalMin" placeholder="例）45">
-        </div>
-        <div class="field">
-          <label>1組あたりの持ち時間（分）</label>
-          <input type="text" id="autoGenPerformMin" placeholder="例）20">
-        </div>
-      </div>
-      <div class="row2">
-        <div class="field">
-          <label>物販持ち時間（分）</label>
-          <input type="text" id="autoGenMerchMin" placeholder="例）60">
-        </div>
-        <div class="field">
-          <label>物販/出演何分後（分）</label>
-          <input type="text" id="autoGenMerchOffsetMin" placeholder="例）15">
-        </div>
-      </div>
-      <button type="button" class="add-row-btn" id="autoGenerateBtn">この内容でタイムテーブルを自動生成</button>
-      <div class="geo-status" id="autoGenStatus"></div>
-      <div class="hint">生成されるのは開始・終了・持ち時間・物販時間・楽屋前後の枠のみです。アーティスト名・マイク本数・車両・楽屋番号・撮影可否・備考などは生成後にこちらで手入力してください。既存のタイムテーブルは上書きされます。</div>
+      <button type="button" class="add-row-btn" id="openAutoGenModalBtn">🪄 自動タイムテーブル生成</button>
+      <div class="hint">開場・開演時間（基本情報欄で入力済みのもの）と、主催入り時刻などを入力すると、組数を自動計算してタイムテーブルを一括生成します。</div>
     </div>
 
     <div class="field-group">
@@ -451,6 +435,51 @@
     </div>
   </div>
 </div>
+
+<div class="modal-overlay" id="autoGenModalOverlay" style="display:none;">
+  <div class="modal-card">
+    <h3>🪄 自動タイムテーブル生成</h3>
+    <div class="hint">開場・開演時間は基本情報欄の値を使います。完全撤収は「最終物販終了の40分後」で固定計算されます。</div>
+    <div class="row2">
+      <div class="field">
+        <label>会場レンタル総時間（時間）</label>
+        <input type="text" id="autoGenRentalHours" placeholder="例）5">
+      </div>
+      <div class="field">
+        <label>主催入り時刻</label>
+        <input type="time" id="autoGenEntryTime">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>リハ時間（分）</label>
+        <input type="text" id="autoGenRehearsalMin" placeholder="例）45">
+      </div>
+      <div class="field">
+        <label>1組あたりの持ち時間（分）</label>
+        <input type="text" id="autoGenPerformMin" placeholder="例）20">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>物販持ち時間（分）</label>
+        <input type="text" id="autoGenMerchMin" placeholder="例）60">
+      </div>
+      <div class="field">
+        <label>物販/出演何分後（分）</label>
+        <input type="text" id="autoGenMerchOffsetMin" placeholder="例）15">
+      </div>
+    </div>
+    <div class="geo-status" id="autoGenStatus"></div>
+    <div class="geo-btn-row" style="margin-top:12px;">
+      <button type="button" class="btn-teal" id="autoGenerateBtn">この内容で生成</button>
+      <button type="button" class="btn-outline" id="closeAutoGenModalBtn">閉じる</button>
+    </div>
+    <div class="hint" style="margin-top:10px;">生成されるのは開始・終了・持ち時間・物販時間・楽屋前後の枠のみです。アーティスト名・マイク本数・車両・楽屋番号・撮影可否・備考などは生成後にタイムテーブルへ直接入力してください。既存のタイムテーブルは上書きされます。</div>
+  </div>
+</div>
+
+<footer class="site-footer">© Kohei Fukumoto</footer>
 
 <script>
 (function(){
@@ -1240,6 +1269,19 @@
   }
   document.getElementById('autoGenerateBtn').addEventListener('click', generateAutoTimetable);
 
+  document.getElementById('openAutoGenModalBtn').addEventListener('click', ()=>{
+    setAutoGenStatus('', '');
+    document.getElementById('autoGenModalOverlay').style.display = 'flex';
+  });
+  document.getElementById('closeAutoGenModalBtn').addEventListener('click', ()=>{
+    document.getElementById('autoGenModalOverlay').style.display = 'none';
+  });
+  document.getElementById('autoGenModalOverlay').addEventListener('click', (e)=>{
+    if(e.target.id === 'autoGenModalOverlay'){
+      document.getElementById('autoGenModalOverlay').style.display = 'none';
+    }
+  });
+
   // ---------- other header fields ----------
   ['f_title','f_announce','f_sale','f_overviewAll']
     .forEach(id=> document.getElementById(id).addEventListener('input', renderPreview));
@@ -1942,7 +1984,7 @@
     btn.textContent = '生成中...';
     try{
       const sheet = document.getElementById('sheet');
-      const canvas = await html2canvas(sheet, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+      const canvas = await html2canvas(sheet, {scale:3, backgroundColor:'#ffffff', useCORS:true});
       const { jsPDF } = window.jspdf;
 
       // A4サイズ(pt) と余白
