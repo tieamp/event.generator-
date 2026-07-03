@@ -246,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v2.5</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v2.6</span></h1>
   </div>
 </div>
 
@@ -2174,7 +2174,9 @@
           };
           if(estimateMic){
             try{
-              const faceCount = await countFacesInFile(chosen.file);
+              // コピー処理で既に読み込んだFileオブジェクトを使い回すとChromeがERR_UPLOAD_FILE_CHANGEDを出すため、直前に取り直す
+              const freshFile = await chosen.handle.getFile();
+              const faceCount = await countFacesInFile(freshFile);
               reportEntry.micCount = faceCount;
               if(faceCount > 0){
                 reportEntry.micApplied = applyMicCountToPerformer(performer, faceCount);
