@@ -246,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v3.0</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v3.1</span></h1>
   </div>
 </div>
 
@@ -438,17 +438,11 @@
           <button type="button" id="pickDestFolderBtn" class="btn-teal">コピー先フォルダを選択</button>
         </div>
         <div class="hint" id="destFolderLabel">未選択</div>
-        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:#b9b4a6;font-weight:600;cursor:pointer;">
-          <input type="checkbox" id="estimateMicCheckbox">
-          🎤 顔検出でマイク本数を推定する（参考値・Chrome限定・処理に時間がかかります）
-        </label>
         <button type="button" id="runPhotoSortBtn" class="add-row-btn" style="margin-top:10px;">③出演者名で検索してコピー実行</button>
         <div class="geo-status" id="photoSortStatus"></div>
         <div id="photoSortResults" style="margin-top:8px;font-size:11.5px;line-height:1.6;"></div>
         <div class="hint">出演者欄のアーティスト名とファイル名を、記号・スペースを無視した部分一致で照合します。誤検出・見逃しがないか、最後に必ずコピー先フォルダをご確認ください。</div>
         <div class="hint">再実行すると、その時点の出演者リストに合わせてフォルダの中身も同期されます（出演者が減った場合は該当ファイルを削除、増えた場合は追加、写真が更新されていれば新しいものに置き換え）。このフォルダに手動で入れた無関係なファイルも削除対象になるのでご注意ください。</div>
-        <div class="hint">マイク本数推定は、コピーした写真から顔検出AIで人数を数え、タイムテーブルの「マイク」欄が空欄の場合のみ参考値として入力します。集合写真の写り方によっては数え間違いが起きるため、必ず最終確認をしてください（すでに入力済みの欄は上書きしません）。</div>
-        <div class="hint">⚠ この顔検出AIは実写の人物を想定して作られています。イラスト・ロゴ・文字入りのフライヤー風画像では誤検出が多くなりやすく、精度は保証できません。閾値は厳しめに設定していますが、実写以外のアー写では参考程度にとどめてください。</div>
       </div>
     </div>
 
@@ -2037,66 +2031,6 @@
     return files;
   }
 
-  // ---------- face detection for mic-count estimation (MediaPipe, lazy-loaded, Chrome-friendly) ----------
-  function withTimeout(promise, timeoutMs, label){
-    timeoutMs = timeoutMs || 20000;
-    return new Promise((resolve, reject)=>{
-      const timer = setTimeout(()=>{
-        reject(new Error(`${label || '処理'}がタイムアウトしました（${Math.round(timeoutMs/1000)}秒）`));
-      }, timeoutMs);
-      promise.then(v=>{ clearTimeout(timer); resolve(v); }, e=>{ clearTimeout(timer); reject(e); });
-    });
-  }
-  let faceDetectorPromise = null;
-  async function ensureFaceModel(){
-    if(!faceDetectorPromise){
-      faceDetectorPromise = withTimeout((async ()=>{
-        const { FaceDetector, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0');
-        const filesetResolver = await FilesetResolver.forVisionTasks(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm'
-        );
-        return await FaceDetector.createFromOptions(filesetResolver, {
-          baseOptions: {
-            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite'
-          },
-          runningMode: 'IMAGE',
-          minDetectionConfidence: 0.4
-        });
-      })(), 20000, '顔検出モデルの読み込み');
-    }
-    return faceDetectorPromise;
-  }
-  async function countFacesInFile(file){
-    const detector = await ensureFaceModel();
-    const imgUrl = URL.createObjectURL(file);
-    try{
-      const img = await new Promise((resolve, reject)=>{
-        const im = new Image();
-        im.onload = () => resolve(im);
-        im.onerror = reject;
-        im.src = imgUrl;
-      });
-      if(img.decode){
-        try{ await img.decode(); }catch(e){ /* decode失敗時もdetectにフォールバックして続行 */ }
-      }
-      const result = detector.detect(img);
-      return result.detections.length;
-    } finally {
-      URL.revokeObjectURL(imgUrl);
-    }
-  }
-  function applyMicCountToPerformer(performerName, count){
-    const combined = state.preRows.concat(state.rows);
-    let applied = false;
-    combined.forEach(r=>{
-      if((r.name||'').trim() === performerName.trim() && !r.mic){
-        r.mic = String(count);
-        applied = true;
-      }
-    });
-    return applied;
-  }
-
   async function runPhotoSort(){
     const statusEl = document.getElementById('photoSortStatus');
     const resultsEl = document.getElementById('photoSortResults');
@@ -2117,19 +2051,11 @@
       const imageFiles = await listImageFilesRecursive(photoSourceDirHandle);
       const newDirHandle = await photoDestRootDirHandle.getDirectoryHandle(folderName, {create:true});
       const performers = state.performers.filter(Boolean);
-      const estimateMic = document.getElementById('estimateMicCheckbox').checked;
 
       if(performers.length === 0){
         statusEl.textContent = '出演者が未入力です。出演者欄を入力してから実行してください。';
         statusEl.className = 'geo-status error';
         return;
-      }
-
-      if(estimateMic){
-        statusEl.textContent = '顔検出モデルを準備しています…（初回は時間がかかります）';
-        try{ await ensureFaceModel(); }catch(e){
-          statusEl.textContent = `顔検出モデルの準備に失敗したため、マイク推定なしで処理を続けます（${e.message}）`;
-        }
       }
 
       const report = [];
@@ -2162,19 +2088,6 @@
             file: chosen.name,
             candidateCount: candidates.length
           };
-          if(estimateMic){
-            try{
-              // コピー処理で既に読み込んだFileオブジェクトを使い回すとChromeがERR_UPLOAD_FILE_CHANGEDを出すため、直前に取り直す
-              const freshFile = await chosen.handle.getFile();
-              const faceCount = await countFacesInFile(freshFile);
-              reportEntry.micCount = faceCount;
-              if(faceCount > 0){
-                reportEntry.micApplied = applyMicCountToPerformer(performer, faceCount);
-              }
-            }catch(faceErr){
-              reportEntry.micError = faceErr.message;
-            }
-          }
           report.push(reportEntry);
         }catch(err){
           report.push({performer, status:'error', message: err.message});
@@ -2196,14 +2109,6 @@
       statusEl.textContent = `完了：「${folderName}」フォルダに ${totalCopied}枚コピーしました。${staleRemoved.length ? `（不要ファイル ${staleRemoved.length}件を削除）` : ''}`;
       statusEl.className = 'geo-status success';
 
-      function micNote(r){
-        if(r.micError) return `／顔検出失敗: ${escapeHtml(r.micError)}`;
-        if(r.micCount == null) return '';
-        if(r.micCount === 0) return `／🎤顔を検出できませんでした（0人）`;
-        if(r.micApplied) return `／🎤推定マイク本数 ${r.micCount}本を入力`;
-        return `／🎤推定${r.micCount}本（マイク欄が入力済みのため反映せず）`;
-      }
-
       resultsEl.innerHTML = report.map(r=>{
         if(r.status === 'notfound'){
           return `<div class="photo-report-row not-found">⚠ ${escapeHtml(r.performer)}：該当する写真が見つかりませんでした</div>`;
@@ -2213,17 +2118,12 @@
         }
         const multiNote = r.candidateCount > 1 ? `／候補${r.candidateCount}件中、最新の更新日時のものを採用` : '';
         if(r.status === 'probable'){
-          return `<div class="photo-report-row">🤔 ${escapeHtml(r.performer)}：完全一致なし、類似ファイルを採用 → ${escapeHtml(r.file)}${multiNote}${micNote(r)}</div>`;
+          return `<div class="photo-report-row">🤔 ${escapeHtml(r.performer)}：完全一致なし、類似ファイルを採用 → ${escapeHtml(r.file)}${multiNote}</div>`;
         }
-        return `<div class="photo-report-row">✔ ${escapeHtml(r.performer)}：${escapeHtml(r.file)}${multiNote}${micNote(r)}</div>`;
+        return `<div class="photo-report-row">✔ ${escapeHtml(r.performer)}：${escapeHtml(r.file)}${multiNote}</div>`;
       }).join('') + (staleRemoved.length
         ? `<div class="photo-report-row not-found">🗑 出演者リストに含まれないため削除：${escapeHtml(staleRemoved.join('、'))}</div>`
         : '');
-
-      if(estimateMic && report.some(r => r.micApplied)){
-        renderRowsForm();
-        renderPreview();
-      }
 
     }catch(err){
       statusEl.textContent = '処理に失敗しました: ' + err.message;
