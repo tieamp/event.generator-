@@ -246,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v2.3</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v2.4</span></h1>
   </div>
 </div>
 
@@ -2038,13 +2038,30 @@
   }
 
   // ---------- face detection for mic-count estimation (lazy-loaded, Chrome-friendly) ----------
-  function loadScriptOnce(src){
+  function loadScriptOnce(src, timeoutMs){
+    timeoutMs = timeoutMs || 15000;
     return new Promise((resolve, reject)=>{
       if(document.querySelector(`script[src="${src}"]`)){ resolve(); return; }
       const s = document.createElement('script');
+      let settled = false;
+      const timer = setTimeout(()=>{
+        if(settled) return;
+        settled = true;
+        reject(new Error(`読み込みがタイムアウトしました（${Math.round(timeoutMs/1000)}秒）: ${src}`));
+      }, timeoutMs);
       s.src = src;
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error('顔検出ライブラリの読み込みに失敗しました'));
+      s.onload = () => {
+        if(settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      s.onerror = () => {
+        if(settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(new Error('顔検出ライブラリの読み込みに失敗しました: ' + src));
+      };
       document.head.appendChild(s);
     });
   }
@@ -2117,7 +2134,9 @@
 
       if(estimateMic){
         statusEl.textContent = '顔検出モデルを準備しています…（初回は時間がかかります）';
-        try{ await ensureFaceModel(); }catch(e){ /* 個別画像処理時にもエラーハンドリングされるため続行 */ }
+        try{ await ensureFaceModel(); }catch(e){
+          statusEl.textContent = `顔検出モデルの準備に失敗したため、マイク推定なしで処理を続けます（${e.message}）`;
+        }
       }
 
       const report = [];
