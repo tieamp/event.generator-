@@ -6,6 +6,7 @@
 <title>イベント制作 ジェネレーター</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --ink:#16151a;
@@ -246,7 +247,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.8</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.9</span></h1>
   </div>
 </div>
 
@@ -445,6 +446,13 @@
         <div class="hint">出演者欄のアーティスト名とファイル名を、記号・スペースを無視した部分一致で照合します。誤検出・見逃しがないか、最後に必ずコピー先フォルダをご確認ください。</div>
         <div class="hint">再実行すると、その時点の出演者リストに合わせてフォルダの中身も同期されます（出演者が減った場合は該当ファイルを削除、増えた場合は追加、写真が更新されていれば新しいものに置き換え）。このフォルダに手動で入れた無関係なファイルも削除対象になるのでご注意ください。</div>
       </div>
+    </div>
+
+    <div class="field-group">
+      <h2>スプレッドシート出力</h2>
+      <div class="hint">Excel形式（.xlsx）で書き出します。日本語フォントの埋め込み問題を回避できるので、Excel・Googleスプレッドシートで開いてから「PDFとして印刷」すれば、文字が完全にくっきりした本物のPDFが作れます。</div>
+      <button type="button" id="exportXlsxBtn" class="add-row-btn">📊 スプレッドシートに出力（Excel）</button>
+      <div class="geo-status" id="xlsxStatus"></div>
     </div>
 
     <div class="actions">
@@ -1645,7 +1653,6 @@
     let html = escapeHtml(name);
     if(address){
       html += ' / ' + escapeHtml(address);
-      html += '\n<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(address) + '" target="_blank">📍 Googleマップで確認</a>';
     }
     return html;
   }
@@ -1674,7 +1681,7 @@
 
     const ticketLines = state.tickets.filter(t=>t.url).map(t=>{
       const labelPart = t.label ? escapeHtml(t.label)+': ' : '';
-      return `${labelPart}<a href="${escapeAttr(t.url)}" target="_blank">${escapeHtml(t.url)}</a>`;
+      return `${labelPart}${escapeHtml(t.url)}`;
     });
     if(ticketLines.length) meta.push(['チケット', ticketLines.join('\n'), true]);
 
@@ -2141,6 +2148,72 @@
     }finally{
       btn.disabled = false;
       btn.textContent = originalText;
+    }
+  });
+
+  // ---------- spreadsheet (XLSX) export ----------
+  document.getElementById('exportXlsxBtn').addEventListener('click', ()=>{
+    const statusEl = document.getElementById('xlsxStatus');
+    try{
+      const rows = [];
+      rows.push([val('f_title') || '（タイトル未入力）']);
+      rows.push([]);
+
+      const dateJP = formatDateJP(val('f_date'));
+      if(dateJP) rows.push(['日程', dateJP]);
+      const venueName = val('f_venueName'), address = val('f_venueAddress');
+      if(venueName) rows.push(['会場', address ? `${venueName} / ${address}` : venueName]);
+      const openT = val('f_openTime'), startT = val('f_startTime');
+      const timeParts = [];
+      if(openT) timeParts.push('OPEN ' + openT);
+      if(startT) timeParts.push('START ' + startT);
+      if(timeParts.length) rows.push(['時間', timeParts.join(' / ')]);
+      const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
+      if(priceLines.length) rows.push(['価格', priceLines.join(' / ')]);
+      const announceJP = formatDateTimeShortJP(val('f_announce'));
+      if(announceJP) rows.push(['告知解禁', announceJP]);
+      const saleJP = formatDateTimeShortJP(val('f_sale'));
+      if(saleJP) rows.push(['販売開始', saleJP]);
+      const performersLine = state.performers.filter(Boolean).join(' / ');
+      if(performersLine) rows.push(['出演者', performersLine]);
+      state.tickets.filter(t=>t.url).forEach(t=>{
+        rows.push(['チケット', t.label ? `${t.label}: ${t.url}` : t.url]);
+      });
+
+      const overviewLines = val('f_overviewAll').split('\n').map(s=>s.trim()).filter(Boolean);
+      if(overviewLines.length){
+        rows.push([]);
+        rows.push(['概要・注意事項・その他']);
+        overviewLines.forEach(l=> rows.push(['・' + l]));
+      }
+
+      rows.push([]);
+      rows.push(['タイムテーブル']);
+      const cols = previewColsList();
+      rows.push(cols.map(c=>c.label));
+      getDisplayRows().forEach(r=>{
+        rows.push(cols.map(c=>{
+          if(c.compute) return c.compute(r) || '';
+          if(c.type === 'checkbox') return r[c.key] ? '〇' : '';
+          return r[c.key] || '';
+        }));
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = cols.map(()=>({wch: 14}));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '概要書');
+
+      const title = val('f_title') || '概要書';
+      const dateStr = document.getElementById('f_date').value;
+      const filename = dateStr ? `${dateStr}_${title}.xlsx` : `${title}.xlsx`;
+      XLSX.writeFile(wb, filename);
+
+      statusEl.textContent = 'スプレッドシートを書き出しました。Excel・Googleスプレッドシートで開いて「ファイル→印刷→PDFとして保存」すると、文字が完全に選択できるPDFになります。';
+      statusEl.className = 'geo-status success';
+    }catch(err){
+      statusEl.textContent = '書き出しに失敗しました: ' + err.message;
+      statusEl.className = 'geo-status error';
     }
   });
 
