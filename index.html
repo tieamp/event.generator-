@@ -244,7 +244,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v5.6</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v5.7</span></h1>
   </div>
 </div>
 
@@ -329,6 +329,10 @@
       <div id="pricesList"></div>
       <button type="button" class="add-mini-btn" id="addPriceBtn">＋ 価格種別を追加</button>
       <div class="hint">「前売 / 女性 / 当日」のように「/」区切りで入力・貼り付けすると、自動的に複数行に分割されます（Enterキーでも分割できます／種別欄・金額欄どちらでも使えます）。</div>
+      <div class="field" style="margin-top:10px;">
+        <label>入場順</label>
+        <input type="text" id="f_entryOrder" placeholder="例）整理番号順 / 一般→女性→当日">
+      </div>
     </div>
 
     <div class="field-group">
@@ -365,7 +369,6 @@
 
     <div class="field-group">
       <button type="button" class="add-row-btn" id="openAutoGenModalBtn">🪄 タイムテーブル案 自動生成</button>
-      <div class="hint">開場・開演時間（基本情報欄で入力済みのもの）と、主催入り時刻などを入力すると、組数を自動計算してタイムテーブルを一括生成します。</div>
     </div>
 
     <div class="field-group">
@@ -398,7 +401,7 @@
       <div class="hint">開始時間・持ち時間のどちらを変更しても終了時間は自動計算されます。「楽屋/入何分前」→出演開始を基準に入室時間、「楽屋/出何分後」→物販終了時間（物販がない行は出演終了時間）を基準に退室時間を自動計算します（分数の入力欄はPDFには出力されません）。</div>
       <div class="hint">終了時間を確定（入力欄からフォーカスを外す）すると、次の枠の開始時間に自動的に反映されます。</div>
       <div class="hint">実際の時間差と持ち時間・物販時間の数値が一致しない場合、上に警告が表示されます。</div>
-      <div class="hint">楽屋・車両・撮影可否・特典会ブースなどは、すべての行で未入力の場合PDF/プレビューの列ごと非表示になり、他の列が広く表示されます。</div>
+      <div class="hint">マイク・楽屋・車両・撮影可否・物販などは、すべての行で未入力の場合PDF/プレビューの列ごと非表示になり、他の列が広く表示されます。</div>
       <div class="hint">「特典会/出演何分後」に入力すると並行物販の判定になります。自動判定は「並行→前物販→終演後」の順ですが、「物販区分（手動指定）」で並行／前物販／終演後／中物販を選ぶと、そちらが優先されます（空欄なら自動判定のまま）。</div>
       <div class="hint">同じ特典会ブース・同じ楽屋番号を使う出演者同士で時間が重なっている場合、上に警告が表示されます。</div>
     </div>
@@ -539,7 +542,7 @@
     {key:'end', label:'終了', type:'time', w:'90', core:true},
     {key:'name', label:'アーティスト名', type:'text', cls:'name-input', core:true},
     {key:'duration', label:'持ち時間', type:'text', w:'70', core:true},
-    {key:'mic', label:'マイク', type:'text', w:'60', core:true},
+    {key:'mic', label:'マイク', type:'text', w:'60'},
     {key:'meetOffsetMin', label:'特典会/出演何分後', type:'text', cls:'narrow', formOnly:true},
     {key:'meetDurationMin', label:'物販/時間(分)', type:'text', cls:'narrow', formOnly:true},
     {key:'meetStart', label:'特典会/開始', type:'time', w:'90', formOnly:true},
@@ -1329,14 +1332,14 @@
   });
 
   // ---------- other header fields ----------
-  ['f_title','f_announce','f_sale','f_overviewAll']
+  ['f_title','f_announce','f_sale','f_overviewAll','f_entryOrder']
     .forEach(id=> document.getElementById(id).addEventListener('input', renderPreview));
   document.getElementById('f_greetingType').addEventListener('change', renderPreview);
 
   // ---------- reset ----------
   document.getElementById('resetBtn').addEventListener('click', ()=>{
     if(!confirm('入力内容をすべてリセットします。よろしいですか？（保存済みの会場住所帳・保存済みイベントは消えません）')) return;
-    ['f_title','f_date','f_openTime','f_startTime','f_announce','f_sale','f_venueName','f_venueAddress','f_overviewAll']
+    ['f_title','f_date','f_openTime','f_startTime','f_announce','f_sale','f_venueName','f_venueAddress','f_overviewAll','f_entryOrder']
       .forEach(id=> document.getElementById(id).value = '');
     document.getElementById('f_greetingType').value = 'announce';
     document.getElementById('dateWeekdayHint').textContent = '';
@@ -1371,6 +1374,7 @@
       venueName: val('f_venueName'),
       venueAddress: val('f_venueAddress'),
       overviewAll: document.getElementById('f_overviewAll').value,
+      entryOrder: document.getElementById('f_entryOrder').value,
       greetingType: document.getElementById('f_greetingType').value,
       performers: state.performers,
       offers: state.offers,
@@ -1396,6 +1400,7 @@
       ? snap.overviewAll
       : [snap.overview, snap.links, snap.other].filter(Boolean).join('\n');
     document.getElementById('f_overviewAll').value = overviewAllValue;
+    document.getElementById('f_entryOrder').value = snap.entryOrder || '';
     document.getElementById('f_greetingType').value = snap.greetingType || 'announce';
     document.getElementById('dateWeekdayHint').textContent = formatDateJP(snap.date || '');
 
@@ -1668,6 +1673,8 @@
 
     const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
     if(priceLines.length) meta.push(['価格', priceLines.join(' / ')]);
+    const entryOrder = val('f_entryOrder');
+    if(entryOrder) meta.push(['入場順', entryOrder]);
 
     const ticketLines = state.tickets.filter(t=>t.url).map(t=>{
       const labelPart = t.label ? escapeHtml(t.label)+': ' : '';
@@ -1779,6 +1786,8 @@
 
     const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
     if(priceLines.length) lines.push(`価格：${priceLines.join(' / ')}`);
+    const entryOrderShare = val('f_entryOrder');
+    if(entryOrderShare) lines.push(`入場順：${entryOrderShare}`);
 
     const announceJP = formatDateTimeShortJP(val('f_announce'));
     if(announceJP) lines.push(`告知解禁：${announceJP}`);
@@ -2216,6 +2225,8 @@
       if(timeParts.length) metaLines.push(['時間', timeParts.join(' / ')]);
       const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
       if(priceLines.length) metaLines.push(['価格', priceLines.join(' / ')]);
+      const entryOrderPdf = val('f_entryOrder');
+      if(entryOrderPdf) metaLines.push(['入場順', entryOrderPdf]);
       const announceJP = formatDateTimeShortJP(val('f_announce'));
       if(announceJP) metaLines.push(['告知解禁', announceJP]);
       const saleJP = formatDateTimeShortJP(val('f_sale'));
