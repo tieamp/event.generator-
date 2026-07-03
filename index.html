@@ -6,7 +6,7 @@
 <title>イベント制作 ジェネレーター</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <style>
   :root{
     --ink:#16151a;
@@ -247,7 +247,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.9</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v5.0</span></h1>
   </div>
 </div>
 
@@ -2152,68 +2152,133 @@
   });
 
   // ---------- spreadsheet (XLSX) export ----------
-  document.getElementById('exportXlsxBtn').addEventListener('click', ()=>{
+  function textDisplayWidth(str){
+    let w = 0;
+    for(const ch of String(str)){
+      const code = ch.codePointAt(0);
+      const isFullWidth = (code >= 0x1100 && code <= 0x115F) || code === 0x2329 || code === 0x232A ||
+        (code >= 0x2E80 && code <= 0xA4CF && code !== 0x303F) ||
+        (code >= 0xAC00 && code <= 0xD7A3) ||
+        (code >= 0xF900 && code <= 0xFAFF) ||
+        (code >= 0xFF00 && code <= 0xFF60) ||
+        (code >= 0xFFE0 && code <= 0xFFE6);
+      w += isFullWidth ? 2 : 1;
+    }
+    return w;
+  }
+  const THIN_BORDER = { top:{style:'thin',color:{argb:'FFCFCAC0'}}, bottom:{style:'thin',color:{argb:'FFCFCAC0'}}, left:{style:'thin',color:{argb:'FFCFCAC0'}}, right:{style:'thin',color:{argb:'FFCFCAC0'}} };
+
+  document.getElementById('exportXlsxBtn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('exportXlsxBtn');
     const statusEl = document.getElementById('xlsxStatus');
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '生成中…';
     try{
-      const rows = [];
-      rows.push([val('f_title') || '（タイトル未入力）']);
-      rows.push([]);
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('概要書');
+
+      function addRow(cells, opts){
+        const row = ws.addRow(cells);
+        if(opts && opts.bold) row.font = { bold: true, size: opts.size || 11 };
+        else row.font = { size: 10 };
+        row.eachCell({includeEmpty:true}, cell=>{ cell.border = THIN_BORDER; });
+        return row;
+      }
+      function addBlank(){
+        ws.addRow([]);
+      }
+
+      addRow([val('f_title') || '（タイトル未入力）'], {bold:true, size:14});
+      addBlank();
 
       const dateJP = formatDateJP(val('f_date'));
-      if(dateJP) rows.push(['日程', dateJP]);
+      if(dateJP) addRow(['日程', dateJP]);
       const venueName = val('f_venueName'), address = val('f_venueAddress');
-      if(venueName) rows.push(['会場', address ? `${venueName} / ${address}` : venueName]);
+      if(venueName) addRow(['会場', address ? `${venueName} / ${address}` : venueName]);
       const openT = val('f_openTime'), startT = val('f_startTime');
       const timeParts = [];
       if(openT) timeParts.push('OPEN ' + openT);
       if(startT) timeParts.push('START ' + startT);
-      if(timeParts.length) rows.push(['時間', timeParts.join(' / ')]);
+      if(timeParts.length) addRow(['時間', timeParts.join(' / ')]);
       const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
-      if(priceLines.length) rows.push(['価格', priceLines.join(' / ')]);
+      if(priceLines.length) addRow(['価格', priceLines.join(' / ')]);
       const announceJP = formatDateTimeShortJP(val('f_announce'));
-      if(announceJP) rows.push(['告知解禁', announceJP]);
+      if(announceJP) addRow(['告知解禁', announceJP]);
       const saleJP = formatDateTimeShortJP(val('f_sale'));
-      if(saleJP) rows.push(['販売開始', saleJP]);
+      if(saleJP) addRow(['販売開始', saleJP]);
       const performersLine = state.performers.filter(Boolean).join(' / ');
-      if(performersLine) rows.push(['出演者', performersLine]);
+      if(performersLine) addRow(['出演者', performersLine]);
       state.tickets.filter(t=>t.url).forEach(t=>{
-        rows.push(['チケット', t.label ? `${t.label}: ${t.url}` : t.url]);
+        addRow(['チケット', t.label ? `${t.label}: ${t.url}` : t.url]);
       });
 
       const overviewLines = val('f_overviewAll').split('\n').map(s=>s.trim()).filter(Boolean);
       if(overviewLines.length){
-        rows.push([]);
-        rows.push(['概要・注意事項・その他']);
-        overviewLines.forEach(l=> rows.push(['・' + l]));
+        addBlank();
+        addRow(['概要・注意事項・その他'], {bold:true});
+        overviewLines.forEach(l=> addRow(['・' + l]));
       }
 
-      rows.push([]);
-      rows.push(['タイムテーブル']);
+      addBlank();
+      addRow(['タイムテーブル'], {bold:true});
       const cols = previewColsList();
-      rows.push(cols.map(c=>c.label));
-      getDisplayRows().forEach(r=>{
-        rows.push(cols.map(c=>{
-          if(c.compute) return c.compute(r) || '';
-          if(c.type === 'checkbox') return r[c.key] ? '〇' : '';
-          return r[c.key] || '';
-        }));
+      const headerRow = addRow(cols.map(c=>c.label), {bold:true});
+      headerRow.eachCell({includeEmpty:true}, cell=>{
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF16151A'} };
+        cell.font = { bold:true, color:{argb:'FFFFFFFF'}, size:10 };
+      });
+      const displayRows = getDisplayRows();
+      const bodyRows = displayRows.map(r => cols.map(c=>{
+        if(c.compute) return c.compute(r) || '';
+        if(c.type === 'checkbox') return r[c.key] ? '〇' : '';
+        return r[c.key] || '';
+      }));
+      bodyRows.forEach(cells => addRow(cells));
+
+      // 列幅を内容に応じて自動調整（タイムテーブル部分の列数を基準に）
+      const colCount = cols.length;
+      const widths = new Array(colCount).fill(8);
+      cols.forEach((c,i)=>{
+        widths[i] = Math.max(widths[i], textDisplayWidth(c.label));
+      });
+      bodyRows.forEach(cells=>{
+        cells.forEach((v,i)=>{
+          widths[i] = Math.max(widths[i], textDisplayWidth(v));
+        });
+      });
+      // 概要欄などタイムテーブル以外の行も1列目の幅に反映
+      let maxFirstColWidth = widths[0];
+      ws.eachRow(row=>{
+        const v = row.getCell(1).value;
+        if(v) maxFirstColWidth = Math.max(maxFirstColWidth, textDisplayWidth(String(v)));
+      });
+      widths[0] = maxFirstColWidth;
+      ws.columns.forEach((col,i)=>{
+        col.width = Math.min(60, Math.max(6, Math.round(widths[i] * 0.62) + 3));
       });
 
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-      ws['!cols'] = cols.map(()=>({wch: 14}));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, '概要書');
-
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
       const title = val('f_title') || '概要書';
       const dateStr = document.getElementById('f_date').value;
-      const filename = dateStr ? `${dateStr}_${title}.xlsx` : `${title}.xlsx`;
-      XLSX.writeFile(wb, filename);
+      a.download = dateStr ? `${dateStr}_${title}.xlsx` : `${title}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-      statusEl.textContent = 'スプレッドシートを書き出しました。Excel・Googleスプレッドシートで開いて「ファイル→印刷→PDFとして保存」すると、文字が完全に選択できるPDFになります。';
+      statusEl.textContent = 'スプレッドシートを書き出しました（列幅・罫線つき）。Excel・Googleスプレッドシートで開いて「ファイル→印刷→PDFとして保存」すると、文字が完全に選択できるPDFになります。';
       statusEl.className = 'geo-status success';
     }catch(err){
       statusEl.textContent = '書き出しに失敗しました: ' + err.message;
       statusEl.className = 'geo-status error';
+    }finally{
+      btn.disabled = false;
+      btn.textContent = orig;
     }
   });
 
