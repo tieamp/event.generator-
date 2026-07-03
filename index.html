@@ -259,20 +259,6 @@
       </div>
       <div class="geo-status" id="savedStatus"></div>
       <div class="hint">お使いの端末にファイルとして保存されます。「PCに保存」でJSONファイルを書き出し、次回「PCから読み込む」でそのファイルを選ぶと、入力内容が復元されます。</div>
-
-      <div class="geo-btn-row" style="margin-top:10px;">
-        <button type="button" id="pickJsonFolderBtn" class="btn-outline">📅 日付から探して読み込む</button>
-      </div>
-      <div id="jsonDateSearchArea" style="display:none;margin-top:8px;">
-        <div class="field">
-          <label>日付を選択</label>
-          <input type="date" id="jsonSearchDate">
-        </div>
-        <button type="button" class="add-row-btn" id="jsonSearchDateBtn">この日付のJSONを検索して読み込む</button>
-        <div id="jsonSearchResults" style="margin-top:8px;font-size:11.5px;line-height:1.6;"></div>
-      </div>
-      <div class="hint" id="jsonFolderUnsupported" style="display:none;color:var(--danger);">お使いのブラウザはこの機能に対応していません。PC版のChromeまたはEdgeでお試しください。</div>
-      <div class="hint">バックアップ用JSONファイルをまとめて保存しているフォルダを選ぶと、日付を指定するだけで該当するファイルを検索して読み込めます（同じ日付に複数ある場合は一覧から選べます）。</div>
     </div>
 
     <div class="field-group">
@@ -1519,84 +1505,6 @@
     if(file) importEventJSON(file);
     e.target.value = '';
   });
-
-  // ---------- date-based JSON search & load (Chrome/Edge desktop only) ----------
-  let jsonBackupDirHandle = null;
-
-  if(!window.showDirectoryPicker){
-    document.getElementById('jsonFolderUnsupported').style.display = '';
-    document.getElementById('pickJsonFolderBtn').disabled = true;
-  } else {
-    document.getElementById('pickJsonFolderBtn').addEventListener('click', async ()=>{
-      try{
-        jsonBackupDirHandle = await window.showDirectoryPicker({mode:'read'});
-        document.getElementById('jsonDateSearchArea').style.display = '';
-        setSavedStatus(`フォルダ「${jsonBackupDirHandle.name}」を選択しました。日付を指定して検索してください。`, 'success');
-      }catch(e){ /* user cancelled the picker */ }
-    });
-    document.getElementById('jsonSearchDateBtn').addEventListener('click', searchAndLoadJsonByDate);
-  }
-
-  async function listJsonFilesRecursive(dirHandle, path){
-    path = path || '';
-    const files = [];
-    for await (const [name, handle] of dirHandle.entries()){
-      if(handle.kind === 'file'){
-        if(/\.json$/i.test(name)) files.push({name, handle, path: path + name});
-      } else if(handle.kind === 'directory'){
-        const sub = await listJsonFilesRecursive(handle, path + name + '/');
-        files.push(...sub);
-      }
-    }
-    return files;
-  }
-
-  async function loadJsonFileHandle(fileHandle){
-    const file = await fileHandle.getFile();
-    const text = await file.text();
-    const snap = JSON.parse(text);
-    applySnapshot(snap);
-    setSavedStatus(`「${snap.title || '（無題）'}」を読み込みました。`, 'success');
-    document.getElementById('jsonSearchResults').innerHTML = '';
-  }
-
-  async function searchAndLoadJsonByDate(){
-    const resultsEl = document.getElementById('jsonSearchResults');
-    resultsEl.innerHTML = '';
-    if(!jsonBackupDirHandle){
-      setSavedStatus('先にフォルダを選択してください。', 'error');
-      return;
-    }
-    const dateVal = document.getElementById('jsonSearchDate').value;
-    if(!dateVal){
-      setSavedStatus('日付を選択してください。', 'error');
-      return;
-    }
-    setSavedStatus('検索しています…', 'loading');
-    try{
-      const allJson = await listJsonFilesRecursive(jsonBackupDirHandle);
-      const matches = allJson.filter(f => f.name.startsWith(dateVal));
-      if(matches.length === 0){
-        setSavedStatus(`${dateVal} のJSONファイルが見つかりませんでした。`, 'error');
-      } else if(matches.length === 1){
-        await loadJsonFileHandle(matches[0].handle);
-      } else {
-        setSavedStatus(`${matches.length}件見つかりました。読み込むファイルを選んでください。`, 'info');
-        resultsEl.innerHTML = matches.map((m, i)=>
-          `<button type="button" class="quick-add" data-idx="${i}" style="display:block;width:100%;text-align:left;margin-top:4px;">${escapeHtml(m.name)}</button>`
-        ).join('');
-        resultsEl.querySelectorAll('button[data-idx]').forEach(btn=>{
-          btn.addEventListener('click', async ()=>{
-            const m = matches[+btn.dataset.idx];
-            await loadJsonFileHandle(m.handle);
-          });
-        });
-      }
-    }catch(err){
-      setSavedStatus('検索に失敗しました: ' + err.message, 'error');
-    }
-  }
-
 
   function timeRangesOverlap(aStart, aEnd, bStart, bEnd){
     const as = timeToMinutes(aStart), ae = timeToMinutes(aEnd), bs = timeToMinutes(bStart), be = timeToMinutes(bEnd);
