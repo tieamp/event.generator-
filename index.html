@@ -246,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v2.0</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v2.2</span></h1>
   </div>
 </div>
 
@@ -2054,7 +2054,7 @@
       blazefaceModelPromise = (async ()=>{
         await loadScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs');
         await loadScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface');
-        return await blazeface.load({scoreThreshold: 0.9, maxFaces: 12});
+        return await blazeface.load({scoreThreshold: 0.98, maxFaces: 10});
       })();
     }
     return blazefaceModelPromise;
