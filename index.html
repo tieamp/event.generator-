@@ -246,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.5</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.6</span></h1>
   </div>
 </div>
 
@@ -2183,7 +2183,7 @@
       await loadScriptOnce('https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js');
 
       btn.textContent = 'フォントを読み込み中…（数MBのため少し時間がかかります）';
-      const fontRes = await fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/mplusrounded1c/MPLUSRounded1c-Regular.ttf');
+      const fontRes = await fetch('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf');
       if(!fontRes.ok) throw new Error('フォントの取得に失敗しました（HTTP ' + fontRes.status + '）');
       const fontBytes = await fontRes.arrayBuffer();
 
