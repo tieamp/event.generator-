@@ -246,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.3</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.4</span></h1>
   </div>
 </div>
 
@@ -2291,9 +2291,35 @@
       // タイムテーブル（手動描画テーブル、自動ページ分割・ヘッダー再掲）
       const cols = previewColsList();
       const displayRows = getDisplayRows();
-      const weights = cols.map(c => c.key === 'name' ? 2 : 1);
-      const totalWeight = weights.reduce((a,b)=>a+b, 0);
-      const colWidths = weights.map(w => contentW * w / totalWeight);
+
+      // 列数に応じてフォントサイズを調整（多いほど小さく）
+      const cellFontSize = cols.length >= 9 ? 6.3 : cols.length >= 7 ? 7 : 7.5;
+      const headerFontSize = cellFontSize;
+      const CELL_PAD = 6, MIN_COL_W = 26;
+
+      // 全行のセル内容を先に計算（幅測定と描画の両方で使う）
+      const rowCells = displayRows.map(r => cols.map(c=>{
+        if(c.compute) return c.compute(r) || '';
+        if(c.type === 'checkbox') return r[c.key] ? '〇' : '';
+        return String(r[c.key] || '');
+      }));
+
+      // 各列の必要幅（ヘッダー・全セルの最大テキスト幅）を実測
+      const idealWidths = cols.map((c, i)=>{
+        let w = font.widthOfTextAtSize(c.label, headerFontSize) + CELL_PAD;
+        rowCells.forEach(cells=>{
+          const cw = font.widthOfTextAtSize(cells[i], cellFontSize) + CELL_PAD;
+          if(cw > w) w = cw;
+        });
+        return Math.max(w, MIN_COL_W);
+      });
+      const idealTotal = idealWidths.reduce((a,b)=>a+b, 0);
+      // 収まる場合はそのまま、収まらない場合は全列を比例縮小して必ずcontentW内に収める
+      const scale = idealTotal > contentW ? contentW / idealTotal : 1;
+      const colWidths = idealWidths.map(w => w * scale);
+      const scaledCellFontSize = scale < 1 ? cellFontSize * Math.max(scale, 0.7) : cellFontSize;
+      const scaledHeaderFontSize = scale < 1 ? headerFontSize * Math.max(scale, 0.7) : headerFontSize;
+
       const rowH = 16, headerH = 18;
 
       function drawTableHeader(){
@@ -2301,7 +2327,7 @@
         page.drawRectangle({x: MARGIN, y: curY - headerH, width: contentW, height: headerH, color: rgb(0.086,0.082,0.102)});
         let x = MARGIN;
         cols.forEach((c,i)=>{
-          drawText(truncateToWidth(font, c.label, 7.5, colWidths[i]-6), x + 4, curY - headerH + 5, 7.5, rgb(1,1,1));
+          drawText(truncateToWidth(font, c.label, scaledHeaderFontSize, colWidths[i]-4), x + 3, curY - headerH + 5, scaledHeaderFontSize, rgb(1,1,1));
           x += colWidths[i];
         });
         curY -= headerH;
@@ -2314,7 +2340,7 @@
         curY -= rowH;
       }
 
-      displayRows.forEach((r, rowIdx)=>{
+      rowCells.forEach((cells, rowIdx)=>{
         if(curY - rowH < MARGIN){
           newPage();
           drawTableHeader();
@@ -2324,11 +2350,7 @@
         }
         let x = MARGIN;
         cols.forEach((c,i)=>{
-          let cellVal;
-          if(c.compute) cellVal = c.compute(r) || '';
-          else if(c.type === 'checkbox') cellVal = r[c.key] ? '〇' : '';
-          else cellVal = r[c.key] || '';
-          drawText(truncateToWidth(font, String(cellVal), 7.5, colWidths[i]-6), x + 3, curY - rowH + 5, 7.5);
+          drawText(truncateToWidth(font, cells[i], scaledCellFontSize, colWidths[i]-4), x + 2, curY - rowH + 5, scaledCellFontSize);
           x += colWidths[i];
         });
         page.drawRectangle({x: MARGIN, y: curY - rowH, width: contentW, height: rowH, borderColor: rgb(0.81,0.78,0.72), borderWidth: 0.5});
