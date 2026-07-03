@@ -247,7 +247,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v5.0</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v5.2</span></h1>
   </div>
 </div>
 
@@ -453,6 +453,13 @@
       <div class="hint">Excel形式（.xlsx）で書き出します。日本語フォントの埋め込み問題を回避できるので、Excel・Googleスプレッドシートで開いてから「PDFとして印刷」すれば、文字が完全にくっきりした本物のPDFが作れます。</div>
       <button type="button" id="exportXlsxBtn" class="add-row-btn">📊 スプレッドシートに出力（Excel）</button>
       <div class="geo-status" id="xlsxStatus"></div>
+    </div>
+
+    <div class="field-group">
+      <h2>PDF書き出し（テキスト版・再挑戦版）</h2>
+      <div class="hint">画像ではなく本物のPDF文字として書き出します。日本語は専用フォント、それ以外の文字（英数字・記号）は標準フォントを自動で使い分ける方式にして、以前起きていた文字の欠落を解消しています。初回は日本語フォント（数MB）を読み込むため少し時間がかかります。</div>
+      <button type="button" id="exportTextPdfBtn" class="add-row-btn">📝 テキスト版PDFを書き出す</button>
+      <div class="geo-status" id="textPdfStatus"></div>
     </div>
 
     <div class="actions">
@@ -2151,6 +2158,286 @@
     }
   });
 
+  // ---------- text-based PDF export (pdf-lib + fontkit, mixed-font: Japanese font + Latin fallback) ----------
+  function loadScriptOnce(src){
+    return new Promise((resolve, reject)=>{
+      if(document.querySelector(`script[src="${src}"]`)){ resolve(); return; }
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('ライブラリの読み込みに失敗しました: ' + src));
+      document.head.appendChild(s);
+    });
+  }
+  function isJapaneseSafeCode(code){
+    return (code >= 0x3000 && code <= 0x303F) || // 日本語記号・句読点
+           (code >= 0x3040 && code <= 0x309F) || // ひらがな
+           (code >= 0x30A0 && code <= 0x30FF) || // カタカナ
+           (code >= 0x4E00 && code <= 0x9FFF) || // 漢字
+           (code >= 0xFF00 && code <= 0xFFEF) || // 全角英数・半角カナ
+           (code >= 0x0000 && code <= 0x007F);   // ASCII基本ラテン
+  }
+  function splitFontRuns(text){
+    const runs = [];
+    let cur = '', curIsJp = null;
+    for(const ch of String(text)){
+      const code = ch.codePointAt(0);
+      const jp = isJapaneseSafeCode(code);
+      if(curIsJp === null){ curIsJp = jp; cur = ch; }
+      else if(jp === curIsJp){ cur += ch; }
+      else { runs.push({text:cur, jp:curIsJp}); cur = ch; curIsJp = jp; }
+    }
+    if(cur) runs.push({text:cur, jp:curIsJp});
+    return runs;
+  }
+  // Helvetica(WinAnsi)がカバーしない文字(ギリシャ文字など)の最終手段の代替
+  const LATIN_FALLBACK_MAP = {'Λ':'A','λ':'a','Ω':'O','ω':'o','Σ':'S','σ':'s','Π':'P','π':'p','Δ':'D','δ':'d','Ψ':'Y','β':'b','Φ':'F','φ':'f'};
+  function sanitizeLatinRun(text){
+    let out = '';
+    for(const ch of text){ out += LATIN_FALLBACK_MAP[ch] || ch; }
+    return out;
+  }
+  function truncateToWidth(measureFn, text, size, maxWidth){
+    if(measureFn(text, size) <= maxWidth) return text;
+    let result = text;
+    while(result.length > 0 && measureFn(result + '…', size) > maxWidth){
+      result = result.slice(0, -1);
+    }
+    return result.length > 0 ? result + '…' : '';
+  }
+
+  document.getElementById('exportTextPdfBtn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('exportTextPdfBtn');
+    const statusEl = document.getElementById('textPdfStatus');
+    const orig = btn.textContent;
+    btn.disabled = true;
+    statusEl.textContent = '';
+    try{
+      btn.textContent = 'ライブラリを読み込み中…';
+      await loadScriptOnce('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js');
+      await loadScriptOnce('https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js');
+
+      btn.textContent = 'フォントを読み込み中…（数MBのため少し時間がかかります）';
+      const fontRes = await fetch('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf');
+      if(!fontRes.ok) throw new Error('フォントの取得に失敗しました（HTTP ' + fontRes.status + '）');
+      const fontBytes = await fontRes.arrayBuffer();
+
+      btn.textContent = 'PDFを生成中…';
+      const { PDFDocument, StandardFonts, rgb, PDFName, PDFString } = window.PDFLib;
+      const pdfDoc = await PDFDocument.create();
+      pdfDoc.registerFontkit(window.fontkit);
+      const jpFont = await pdfDoc.embedFont(fontBytes, {subset: true});
+      const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      const PAGE_W = 595.28, PAGE_H = 841.89, MARGIN = 40;
+      const contentW = PAGE_W - MARGIN * 2;
+
+      let page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+      let curY = PAGE_H - MARGIN;
+
+      function newPage(){
+        page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+        curY = PAGE_H - MARGIN;
+      }
+      function ensureSpace(neededHeight){
+        if(curY - neededHeight < MARGIN) newPage();
+      }
+      // 文字種別ごとに自動でフォントを振り分けて描画
+      function measureMixed(text, size){
+        return splitFontRuns(text).reduce((sum, run)=>{
+          const t = run.jp ? run.text : sanitizeLatinRun(run.text);
+          const f = run.jp ? jpFont : latinFont;
+          return sum + f.widthOfTextAtSize(t, size);
+        }, 0);
+      }
+      function drawMixedText(text, x, y, size, color){
+        let curX = x;
+        splitFontRuns(text).forEach(run=>{
+          const t = run.jp ? run.text : sanitizeLatinRun(run.text);
+          const f = run.jp ? jpFont : latinFont;
+          page.drawText(t, {x: curX, y, size, font: f, color: color || rgb(0.09,0.08,0.1)});
+          curX += f.widthOfTextAtSize(t, size);
+        });
+        return curX - x;
+      }
+      function addLink(x, y, w, h, url){
+        const linkAnnotation = pdfDoc.context.obj({
+          Type: 'Annot', Subtype: 'Link',
+          Rect: [x, y, x + w, y + h],
+          Border: [0,0,0],
+          A: { Type:'Action', S:'URI', URI: PDFString.of(url) }
+        });
+        const linkRef = pdfDoc.context.register(linkAnnotation);
+        const existing = page.node.Annots();
+        const arr = existing ? existing.asArray() : [];
+        page.node.set(PDFName.of('Annots'), pdfDoc.context.obj([...arr, linkRef]));
+      }
+
+      // タイトル
+      drawMixedText(val('f_title') || '（タイトル未入力）', MARGIN, curY - 14, 15);
+      curY -= 30;
+
+      // メタ情報
+      const metaLines = [];
+      const dateJP = formatDateJP(val('f_date'));
+      if(dateJP) metaLines.push(['日程', dateJP]);
+      const venueName = val('f_venueName'), address = val('f_venueAddress');
+      if(venueName) metaLines.push(['会場', address ? `${venueName}（${address}）` : venueName]);
+      const openT = val('f_openTime'), startT = val('f_startTime');
+      const timeParts = [];
+      if(openT) timeParts.push('OPEN ' + openT);
+      if(startT) timeParts.push('START ' + startT);
+      if(timeParts.length) metaLines.push(['時間', timeParts.join(' / ')]);
+      const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
+      if(priceLines.length) metaLines.push(['価格', priceLines.join(' / ')]);
+      const announceJP = formatDateTimeShortJP(val('f_announce'));
+      if(announceJP) metaLines.push(['告知解禁', announceJP]);
+      const saleJP = formatDateTimeShortJP(val('f_sale'));
+      if(saleJP) metaLines.push(['販売開始', saleJP]);
+      const performersLine = state.performers.filter(Boolean).join(' / ');
+      if(performersLine) metaLines.push(['出演者', performersLine]);
+
+      metaLines.forEach(([label, text])=>{
+        ensureSpace(14);
+        drawMixedText(`${label}：${text}`, MARGIN, curY - 10, 9);
+        curY -= 14;
+      });
+
+      // チケットURL（実リンク）
+      const tickets = state.tickets.filter(t=>t.url);
+      if(tickets.length){
+        ensureSpace(14);
+        drawMixedText('チケット：', MARGIN, curY - 10, 9);
+        curY -= 14;
+        tickets.forEach(t=>{
+          ensureSpace(13);
+          const label = t.label ? `${t.label}: ` : '';
+          const full = label + t.url;
+          drawMixedText(full, MARGIN + 10, curY - 9, 8.5, rgb(0.16,0.4,0.55));
+          const w = measureMixed(full, 8.5);
+          addLink(MARGIN + 10, curY - 11, w, 12, t.url);
+          curY -= 13;
+        });
+      }
+
+      // 概要・注意事項・その他（単独URL行は実リンク）
+      const overviewLines = val('f_overviewAll').split('\n').map(s=>s.trim()).filter(Boolean);
+      if(overviewLines.length){
+        curY -= 4;
+        overviewLines.forEach(line=>{
+          ensureSpace(13);
+          const urlMatch = line.match(/^(https?:\/\/\S+)$/);
+          const text = '・' + line;
+          drawMixedText(text, MARGIN, curY - 9, 8.5, urlMatch ? rgb(0.16,0.4,0.55) : undefined);
+          if(urlMatch){
+            const w = measureMixed(text, 8.5);
+            addLink(MARGIN, curY - 11, w, 12, urlMatch[1]);
+          }
+          curY -= 13;
+        });
+      }
+
+      curY -= 12;
+
+      // タイムテーブル（手動描画テーブル、自動ページ分割・ヘッダー再掲・列幅自動調整）
+      const cols = previewColsList();
+      const displayRows = getDisplayRows();
+      const cellFontSize = cols.length >= 9 ? 6.3 : cols.length >= 7 ? 7 : 7.5;
+      const headerFontSize = cellFontSize;
+      const CELL_PAD = 6, MIN_COL_W = 26;
+
+      const rowCells = displayRows.map(r => cols.map(c=>{
+        if(c.compute) return c.compute(r) || '';
+        if(c.type === 'checkbox') return r[c.key] ? '〇' : '';
+        return String(r[c.key] || '');
+      }));
+
+      const idealWidths = cols.map((c, i)=>{
+        let w = measureMixed(c.label, headerFontSize) + CELL_PAD;
+        rowCells.forEach(cells=>{
+          const cw = measureMixed(cells[i], cellFontSize) + CELL_PAD;
+          if(cw > w) w = cw;
+        });
+        return Math.max(w, MIN_COL_W);
+      });
+      const idealTotal = idealWidths.reduce((a,b)=>a+b, 0);
+      const scale = idealTotal > contentW ? contentW / idealTotal : 1;
+      const colWidths = idealWidths.map(w => w * scale);
+      const scaledCellFontSize = scale < 1 ? cellFontSize * Math.max(scale, 0.7) : cellFontSize;
+      const scaledHeaderFontSize = scale < 1 ? headerFontSize * Math.max(scale, 0.7) : headerFontSize;
+
+      const rowH = 16, headerH = 18;
+      const measureAtSize = (t, s) => measureMixed(t, s);
+
+      function drawColumnDividers(topY, height, color){
+        let x = MARGIN;
+        cols.forEach((c,i)=>{
+          page.drawLine({start:{x, y: topY}, end:{x, y: topY - height}, thickness: 0.5, color});
+          x += colWidths[i];
+        });
+        page.drawLine({start:{x, y: topY}, end:{x, y: topY - height}, thickness: 0.5, color});
+      }
+      function drawTableHeader(){
+        ensureSpace(headerH);
+        page.drawRectangle({x: MARGIN, y: curY - headerH, width: contentW, height: headerH, color: rgb(0.086,0.082,0.102)});
+        let x = MARGIN;
+        cols.forEach((c,i)=>{
+          drawMixedText(truncateToWidth(measureAtSize, c.label, scaledHeaderFontSize, colWidths[i]-4), x + 3, curY - headerH + 5, scaledHeaderFontSize, rgb(1,1,1));
+          x += colWidths[i];
+        });
+        drawColumnDividers(curY, headerH, rgb(0.35,0.34,0.38));
+        curY -= headerH;
+      }
+      drawTableHeader();
+
+      if(displayRows.length === 0){
+        ensureSpace(rowH);
+        drawMixedText('タイムテーブルが未入力です', MARGIN + 4, curY - rowH + 5, 8);
+        curY -= rowH;
+      }
+
+      rowCells.forEach((cells, rowIdx)=>{
+        if(curY - rowH < MARGIN){
+          newPage();
+          drawTableHeader();
+        }
+        if(rowIdx % 2 === 1){
+          page.drawRectangle({x: MARGIN, y: curY - rowH, width: contentW, height: rowH, color: rgb(0.97,0.96,0.94)});
+        }
+        let x = MARGIN;
+        cols.forEach((c,i)=>{
+          drawMixedText(truncateToWidth(measureAtSize, cells[i], scaledCellFontSize, colWidths[i]-4), x + 2, curY - rowH + 5, scaledCellFontSize);
+          x += colWidths[i];
+        });
+        page.drawRectangle({x: MARGIN, y: curY - rowH, width: contentW, height: rowH, borderColor: rgb(0.81,0.78,0.72), borderWidth: 0.5});
+        drawColumnDividers(curY, rowH, rgb(0.81,0.78,0.72));
+        curY -= rowH;
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], {type:'application/pdf'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const title = val('f_title') || '概要書';
+      const dateStr = document.getElementById('f_date').value;
+      a.download = dateStr ? `${dateStr}_${title}_text.pdf` : `${title}_text.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      statusEl.textContent = 'テキスト版PDFを書き出しました。文字が選択・検索できるか確認してください。';
+      statusEl.className = 'geo-status success';
+    }catch(err){
+      statusEl.textContent = '生成に失敗しました: ' + err.message + '（「PDFに書き出す」（画像版）か「スプレッドシートに出力」をお試しください）';
+      statusEl.className = 'geo-status error';
+    }finally{
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  });
+
   // ---------- spreadsheet (XLSX) export ----------
   function textDisplayWidth(str){
     let w = 0;
@@ -2166,7 +2453,16 @@
     }
     return w;
   }
-  const THIN_BORDER = { top:{style:'thin',color:{argb:'FFCFCAC0'}}, bottom:{style:'thin',color:{argb:'FFCFCAC0'}}, left:{style:'thin',color:{argb:'FFCFCAC0'}}, right:{style:'thin',color:{argb:'FFCFCAC0'}} };
+  // プレビューと同じ配色 (--ink, --teal, --amber-deep, --paper-line)
+  const XLSX_COLOR = {
+    ink: 'FF16151A',
+    teal: 'FF2F5D62',
+    amberDeep: 'FFC9822A',
+    borderLine: 'FFCFCAC0',
+    white: 'FFFFFFFF'
+  };
+  const THIN_BORDER = { top:{style:'thin',color:{argb:XLSX_COLOR.borderLine}}, bottom:{style:'thin',color:{argb:XLSX_COLOR.borderLine}}, left:{style:'thin',color:{argb:XLSX_COLOR.borderLine}}, right:{style:'thin',color:{argb:XLSX_COLOR.borderLine}} };
+  const TITLE_UNDERLINE = { top:{style:'thin',color:{argb:XLSX_COLOR.borderLine}}, left:{style:'thin',color:{argb:XLSX_COLOR.borderLine}}, right:{style:'thin',color:{argb:XLSX_COLOR.borderLine}}, bottom:{style:'medium',color:{argb:XLSX_COLOR.ink}} };
 
   document.getElementById('exportXlsxBtn').addEventListener('click', async ()=>{
     const btn = document.getElementById('exportXlsxBtn');
@@ -2180,53 +2476,66 @@
 
       function addRow(cells, opts){
         const row = ws.addRow(cells);
-        if(opts && opts.bold) row.font = { bold: true, size: opts.size || 11 };
-        else row.font = { size: 10 };
-        row.eachCell({includeEmpty:true}, cell=>{ cell.border = THIN_BORDER; });
+        opts = opts || {};
+        row.font = { bold: !!opts.bold, size: opts.size || 10, color: opts.color ? {argb: opts.color} : undefined };
+        row.eachCell({includeEmpty:true}, cell=>{ cell.border = opts.border || THIN_BORDER; });
         return row;
       }
       function addBlank(){
         ws.addRow([]);
       }
+      // dt/ddスタイルのメタ情報行（ラベルはティール・太字、値は通常）
+      function addMetaRow(label, text){
+        const row = addRow([label, text]);
+        row.getCell(1).font = { bold: true, size: 9.5, color: {argb: XLSX_COLOR.teal} };
+        row.getCell(2).font = { size: 10 };
+      }
+      // 「概要」「タイムテーブル」のような見出しバッジ（プレビューの黒背景・白文字バッジと同じ見た目）
+      function addSectionBadge(label){
+        const row = addRow([label], {bold:true});
+        row.getCell(1).fill = { type:'pattern', pattern:'solid', fgColor:{argb: XLSX_COLOR.ink} };
+        row.getCell(1).font = { bold:true, size:9.5, color:{argb: XLSX_COLOR.white} };
+      }
 
-      addRow([val('f_title') || '（タイトル未入力）'], {bold:true, size:14});
+      // タイトル（プレビューのsheet-headerと同じく下線を太めに）
+      const titleRow = addRow([val('f_title') || '（タイトル未入力）'], {bold:true, size:15, border: TITLE_UNDERLINE});
       addBlank();
 
       const dateJP = formatDateJP(val('f_date'));
-      if(dateJP) addRow(['日程', dateJP]);
+      if(dateJP) addMetaRow('日程', dateJP);
       const venueName = val('f_venueName'), address = val('f_venueAddress');
-      if(venueName) addRow(['会場', address ? `${venueName} / ${address}` : venueName]);
+      if(venueName) addMetaRow('会場', address ? `${venueName} / ${address}` : venueName);
       const openT = val('f_openTime'), startT = val('f_startTime');
       const timeParts = [];
       if(openT) timeParts.push('OPEN ' + openT);
       if(startT) timeParts.push('START ' + startT);
-      if(timeParts.length) addRow(['時間', timeParts.join(' / ')]);
+      if(timeParts.length) addMetaRow('時間', timeParts.join(' / '));
       const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
-      if(priceLines.length) addRow(['価格', priceLines.join(' / ')]);
+      if(priceLines.length) addMetaRow('価格', priceLines.join(' / '));
       const announceJP = formatDateTimeShortJP(val('f_announce'));
-      if(announceJP) addRow(['告知解禁', announceJP]);
+      if(announceJP) addMetaRow('告知解禁', announceJP);
       const saleJP = formatDateTimeShortJP(val('f_sale'));
-      if(saleJP) addRow(['販売開始', saleJP]);
+      if(saleJP) addMetaRow('販売開始', saleJP);
       const performersLine = state.performers.filter(Boolean).join(' / ');
-      if(performersLine) addRow(['出演者', performersLine]);
+      if(performersLine) addMetaRow('出演者', performersLine);
       state.tickets.filter(t=>t.url).forEach(t=>{
-        addRow(['チケット', t.label ? `${t.label}: ${t.url}` : t.url]);
+        const row = addMetaRow('チケット', t.label ? `${t.label}: ${t.url}` : t.url);
       });
 
       const overviewLines = val('f_overviewAll').split('\n').map(s=>s.trim()).filter(Boolean);
       if(overviewLines.length){
         addBlank();
-        addRow(['概要・注意事項・その他'], {bold:true});
+        addSectionBadge('概要・注意事項・その他');
         overviewLines.forEach(l=> addRow(['・' + l]));
       }
 
       addBlank();
-      addRow(['タイムテーブル'], {bold:true});
+      addSectionBadge('タイムテーブル');
       const cols = previewColsList();
       const headerRow = addRow(cols.map(c=>c.label), {bold:true});
       headerRow.eachCell({includeEmpty:true}, cell=>{
-        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FF16151A'} };
-        cell.font = { bold:true, color:{argb:'FFFFFFFF'}, size:10 };
+        cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb: XLSX_COLOR.ink} };
+        cell.font = { bold:true, color:{argb: XLSX_COLOR.white}, size:10 };
       });
       const displayRows = getDisplayRows();
       const bodyRows = displayRows.map(r => cols.map(c=>{
@@ -2234,7 +2543,14 @@
         if(c.type === 'checkbox') return r[c.key] ? '〇' : '';
         return r[c.key] || '';
       }));
-      bodyRows.forEach(cells => addRow(cells));
+      bodyRows.forEach((cells, idx) => {
+        const row = addRow(cells);
+        if(idx % 2 === 1){
+          row.eachCell({includeEmpty:true}, cell=>{
+            cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFF7F5F0'} };
+          });
+        }
+      });
 
       // 列幅を内容に応じて自動調整（タイムテーブル部分の列数を基準に）
       const colCount = cols.length;
