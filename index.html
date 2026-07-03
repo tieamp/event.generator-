@@ -246,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.6</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.7</span></h1>
   </div>
 </div>
 
@@ -2206,8 +2206,23 @@
       function ensureSpace(neededHeight){
         if(curY - neededHeight < MARGIN) newPage();
       }
+      const fontFallbackMap = {'Λ':'A','λ':'a','Ø':'O','ø':'o','Ω':'O','β':'b','Æ':'AE','æ':'ae','Þ':'Th','þ':'th'};
+      function sanitizeForFont(text){
+        if(!text) return text;
+        let result = '';
+        for(const ch of String(text)){
+          if(fontFallbackMap[ch]){ result += fontFallbackMap[ch]; continue; }
+          try{
+            font.widthOfTextAtSize(ch, 10);
+            result += ch;
+          }catch(e){
+            result += '?';
+          }
+        }
+        return result;
+      }
       function drawText(text, x, y, size, color){
-        page.drawText(text || '', {x, y, size, font, color: color || rgb(0.09,0.08,0.1)});
+        page.drawText(sanitizeForFont(text) || '', {x, y, size, font, color: color || rgb(0.09,0.08,0.1)});
       }
       function addLink(x, y, w, h, url){
         const linkAnnotation = pdfDoc.context.obj({
@@ -2261,7 +2276,7 @@
         tickets.forEach(t=>{
           ensureSpace(13);
           const label = t.label ? `${t.label}: ` : '';
-          const full = label + t.url;
+          const full = sanitizeForFont(label + t.url);
           drawText(full, MARGIN + 10, curY - 9, 8.5, rgb(0.16,0.4,0.55));
           const w = font.widthOfTextAtSize(full, 8.5);
           addLink(MARGIN + 10, curY - 11, w, 12, t.url);
@@ -2276,7 +2291,7 @@
         overviewLines.forEach(line=>{
           ensureSpace(13);
           const urlMatch = line.match(/^(https?:\/\/\S+)$/);
-          const text = '・' + line;
+          const text = sanitizeForFont('・' + line);
           drawText(text, MARGIN, curY - 9, 8.5, urlMatch ? rgb(0.16,0.4,0.55) : undefined);
           if(urlMatch){
             const w = font.widthOfTextAtSize(text, 8.5);
@@ -2297,16 +2312,19 @@
       const headerFontSize = cellFontSize;
       const CELL_PAD = 6, MIN_COL_W = 26;
 
-      // 全行のセル内容を先に計算（幅測定と描画の両方で使う）
+      // 全行のセル内容を先に計算（幅測定と描画の両方で使う）。フォントに無い文字は事前に安全な文字へ置換。
       const rowCells = displayRows.map(r => cols.map(c=>{
-        if(c.compute) return c.compute(r) || '';
-        if(c.type === 'checkbox') return r[c.key] ? '〇' : '';
-        return String(r[c.key] || '');
+        let v;
+        if(c.compute) v = c.compute(r) || '';
+        else if(c.type === 'checkbox') v = r[c.key] ? '〇' : '';
+        else v = String(r[c.key] || '');
+        return sanitizeForFont(v);
       }));
+      const colLabels = cols.map(c => sanitizeForFont(c.label));
 
       // 各列の必要幅（ヘッダー・全セルの最大テキスト幅）を実測
       const idealWidths = cols.map((c, i)=>{
-        let w = font.widthOfTextAtSize(c.label, headerFontSize) + CELL_PAD;
+        let w = font.widthOfTextAtSize(colLabels[i], headerFontSize) + CELL_PAD;
         rowCells.forEach(cells=>{
           const cw = font.widthOfTextAtSize(cells[i], cellFontSize) + CELL_PAD;
           if(cw > w) w = cw;
@@ -2336,7 +2354,7 @@
         page.drawRectangle({x: MARGIN, y: curY - headerH, width: contentW, height: headerH, color: rgb(0.086,0.082,0.102)});
         let x = MARGIN;
         cols.forEach((c,i)=>{
-          drawText(truncateToWidth(font, c.label, scaledHeaderFontSize, colWidths[i]-4), x + 3, curY - headerH + 5, scaledHeaderFontSize, rgb(1,1,1));
+          drawText(truncateToWidth(font, colLabels[i], scaledHeaderFontSize, colWidths[i]-4), x + 3, curY - headerH + 5, scaledHeaderFontSize, rgb(1,1,1));
           x += colWidths[i];
         });
         drawColumnDividers(curY, headerH, rgb(0.35,0.34,0.38));
