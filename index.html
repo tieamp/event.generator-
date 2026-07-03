@@ -320,18 +320,11 @@
     </div>
 
     <div class="field-group">
-      <h2>概要・リンク・その他</h2>
+      <h2>概要・注意事項・その他</h2>
       <div class="field">
-        <label>概要（1行=1項目、●で表示されます）</label>
-        <textarea id="f_overview" placeholder="キッチンカー出店あり&#10;一眼レフカメラのみ撮影エリアあり(有料)"></textarea>
-      </div>
-      <div class="field">
-        <label>参考URL（1行=1件、「ラベル: URL」形式）</label>
-        <textarea id="f_links" placeholder="公式サイト: https://example.com&#10;会場アクセス: https://example.com/access"></textarea>
-      </div>
-      <div class="field">
-        <label>その他備考（物販手数料など）</label>
-        <textarea id="f_other" placeholder="【物販手数料】単日出演:5,000円／日 ..."></textarea>
+        <label>概要・注意事項・その他（1行=1項目、●で表示されます）</label>
+        <textarea id="f_overviewAll" style="min-height:120px;" placeholder="キッチンカー出店あり&#10;一眼レフカメラのみ撮影エリアあり(有料)&#10;【物販手数料】単日出演:5,000円／日&#10;公式サイト: https://example.com"></textarea>
+        <div class="hint">URLを含む行は自動的にリンクになります。</div>
       </div>
     </div>
 
@@ -444,13 +437,8 @@
       <dl class="meta-grid" id="metaGrid"></dl>
 
       <div class="sheet-section" id="overviewSection">
-        <h3>概要</h3>
+        <h3>概要・注意事項・その他</h3>
         <ul class="bullets" id="p_overview"></ul>
-      </div>
-
-      <div class="sheet-section" id="otherSection">
-        <h3>その他</h3>
-        <div id="p_other" style="font-size:11.5px;white-space:pre-wrap;line-height:1.5;"></div>
       </div>
 
       <div class="sheet-section">
@@ -529,6 +517,10 @@
     return (str||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
   function escapeAttr(str){ return escapeHtml(str); }
+  function linkify(str){
+    const escaped = escapeHtml(str);
+    return escaped.replace(/(https?:\/\/[^\s<]+)/g, url => `<a href="${url}" target="_blank">${url}</a>`);
+  }
   function val(id){ return document.getElementById(id).value.trim(); }
   function rowHasData(r){ return Object.values(r).some(v => v !== '' && v !== false); }
 
@@ -1249,14 +1241,14 @@
   document.getElementById('autoGenerateBtn').addEventListener('click', generateAutoTimetable);
 
   // ---------- other header fields ----------
-  ['f_title','f_announce','f_sale','f_overview','f_links','f_other']
+  ['f_title','f_announce','f_sale','f_overviewAll']
     .forEach(id=> document.getElementById(id).addEventListener('input', renderPreview));
   document.getElementById('f_greetingType').addEventListener('change', renderPreview);
 
   // ---------- reset ----------
   document.getElementById('resetBtn').addEventListener('click', ()=>{
     if(!confirm('入力内容をすべてリセットします。よろしいですか？（保存済みの会場住所帳・保存済みイベントは消えません）')) return;
-    ['f_title','f_date','f_openTime','f_startTime','f_announce','f_sale','f_venueName','f_venueAddress','f_overview','f_links','f_other']
+    ['f_title','f_date','f_openTime','f_startTime','f_announce','f_sale','f_venueName','f_venueAddress','f_overviewAll']
       .forEach(id=> document.getElementById(id).value = '');
     document.getElementById('f_greetingType').value = 'announce';
     document.getElementById('dateWeekdayHint').textContent = '';
@@ -1288,9 +1280,7 @@
       sale: document.getElementById('f_sale').value,
       venueName: val('f_venueName'),
       venueAddress: val('f_venueAddress'),
-      overview: document.getElementById('f_overview').value,
-      links: document.getElementById('f_links').value,
-      other: document.getElementById('f_other').value,
+      overviewAll: document.getElementById('f_overviewAll').value,
       greetingType: document.getElementById('f_greetingType').value,
       performers: state.performers,
       prices: state.prices,
@@ -1311,9 +1301,10 @@
     document.getElementById('f_sale').value = snap.sale || '';
     document.getElementById('f_venueName').value = snap.venueName || '';
     document.getElementById('f_venueAddress').value = snap.venueAddress || '';
-    document.getElementById('f_overview').value = snap.overview || '';
-    document.getElementById('f_links').value = snap.links || '';
-    document.getElementById('f_other').value = snap.other || '';
+    const overviewAllValue = snap.overviewAll != null
+      ? snap.overviewAll
+      : [snap.overview, snap.links, snap.other].filter(Boolean).join('\n');
+    document.getElementById('f_overviewAll').value = overviewAllValue;
     document.getElementById('f_greetingType').value = snap.greetingType || 'announce';
     document.getElementById('dateWeekdayHint').textContent = formatDateJP(snap.date || '');
 
@@ -1561,27 +1552,12 @@
     const performersLine = state.performers.filter(Boolean).join(' / ');
     if(performersLine) meta.push(['出演者', performersLine]);
 
-    const links = val('f_links').split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{
-      const idx = l.indexOf(':');
-      if(idx===-1) return {label:l, url:''};
-      return {label:l.slice(0,idx).trim(), url:l.slice(idx+1).trim()};
-    });
-    if(links.length){
-      const linkHtml = links.map(l=> l.url ? `${escapeHtml(l.label)}: <a href="${escapeAttr(l.url)}" target="_blank">${escapeHtml(l.url)}</a>` : escapeHtml(l.label)).join('\n');
-      meta.push(['参考URL', linkHtml, true]);
-    }
-
     document.getElementById('metaGrid').innerHTML = meta.map(([k,v,isHtml])=>`<dt>${escapeHtml(k)}</dt><dd>${isHtml ? v : escapeHtml(v)}</dd>`).join('');
 
-    const overviewLines = val('f_overview').split('\n').map(s=>s.trim()).filter(Boolean);
+    const overviewLines = val('f_overviewAll').split('\n').map(s=>s.trim()).filter(Boolean);
     const overviewSection = document.getElementById('overviewSection');
     overviewSection.style.display = overviewLines.length ? '' : 'none';
-    if(overviewLines.length) document.getElementById('p_overview').innerHTML = overviewLines.map(l=>`<li>${escapeHtml(l)}</li>`).join('');
-
-    const otherText = val('f_other');
-    const otherSection = document.getElementById('otherSection');
-    otherSection.style.display = otherText ? '' : 'none';
-    if(otherText) document.getElementById('p_other').textContent = otherText;
+    if(overviewLines.length) document.getElementById('p_overview').innerHTML = overviewLines.map(l=>`<li>${linkify(l)}</li>`).join('');
 
     const cols = previewColsList();
     const sheetEl = document.getElementById('sheet');
@@ -1680,10 +1656,10 @@
       lines.push(`出演者：${performersLine}`);
     }
 
-    const overviewLines = val('f_overview').split('\n').map(s=>s.trim()).filter(Boolean);
+    const overviewLines = val('f_overviewAll').split('\n').map(s=>s.trim()).filter(Boolean);
     if(overviewLines.length){
       lines.push('');
-      lines.push('概要：');
+      lines.push('概要・注意事項・その他：');
       overviewLines.forEach(l=> lines.push('・' + l));
     }
 
@@ -1699,20 +1675,6 @@
       }
       lines.push(line);
     });
-
-    const otherText = val('f_other');
-    if(otherText){
-      lines.push('');
-      lines.push('その他：');
-      lines.push(otherText);
-    }
-
-    const links = val('f_links').split('\n').map(l=>l.trim()).filter(Boolean);
-    if(links.length){
-      lines.push('');
-      lines.push('参考URL：');
-      links.forEach(l=> lines.push(l));
-    }
 
     return lines.join('\n');
   }
