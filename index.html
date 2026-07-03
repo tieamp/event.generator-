@@ -6,7 +6,6 @@
 <title>イベント制作 ジェネレーター</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
     --ink:#16151a;
@@ -247,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.2</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.3</span></h1>
   </div>
 </div>
 
@@ -2152,27 +2151,24 @@
     }
   });
 
-  // ---------- text-based PDF export (experimental, embeds real Japanese font) ----------
-  function arrayBufferToBase64(buffer){
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    const chunkSize = 0x8000;
-    for(let i = 0; i < bytes.length; i += chunkSize){
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-    }
-    return btoa(binary);
+  // ---------- text-based PDF export (experimental, pdf-lib + fontkit) ----------
+  function loadScriptOnce(src){
+    return new Promise((resolve, reject)=>{
+      if(document.querySelector(`script[src="${src}"]`)){ resolve(); return; }
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('ライブラリの読み込みに失敗しました: ' + src));
+      document.head.appendChild(s);
+    });
   }
-  let notoFontBase64Promise = null;
-  async function loadJapaneseFontBase64(){
-    if(!notoFontBase64Promise){
-      notoFontBase64Promise = (async ()=>{
-        const res = await fetch('https://raw.githubusercontent.com/kongou-ae/font/master/NotoSansJP-Regular.ttf');
-        if(!res.ok) throw new Error('フォントの取得に失敗しました（HTTP ' + res.status + '）');
-        const buf = await res.arrayBuffer();
-        return arrayBufferToBase64(buf);
-      })();
+  function truncateToWidth(font, text, size, maxWidth){
+    if(font.widthOfTextAtSize(text, size) <= maxWidth) return text;
+    let result = text;
+    while(result.length > 0 && font.widthOfTextAtSize(result + '…', size) > maxWidth){
+      result = result.slice(0, -1);
     }
-    return notoFontBase64Promise;
+    return result.length > 0 ? result + '…' : '';
   }
 
   document.getElementById('exportTextPdfBtn').addEventListener('click', async ()=>{
@@ -2180,27 +2176,57 @@
     const statusEl = document.getElementById('textPdfStatus');
     const orig = btn.textContent;
     btn.disabled = true;
-    btn.textContent = 'フォントを読み込み中…（数MBのため少し時間がかかります）';
     statusEl.textContent = '';
     try{
-      const fontBase64 = await loadJapaneseFontBase64();
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({orientation:'portrait', unit:'pt', format:'a4'});
-      pdf.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64);
-      pdf.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal');
-      pdf.setFont('NotoSansJP');
+      btn.textContent = 'ライブラリを読み込み中…';
+      await loadScriptOnce('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js');
+      await loadScriptOnce('https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js');
+
+      btn.textContent = 'フォントを読み込み中…（数MBのため少し時間がかかります）';
+      const fontRes = await fetch('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf');
+      if(!fontRes.ok) throw new Error('フォントの取得に失敗しました（HTTP ' + fontRes.status + '）');
+      const fontBytes = await fontRes.arrayBuffer();
 
       btn.textContent = 'PDFを生成中…';
+      const { PDFDocument, rgb, PDFName, PDFString } = window.PDFLib;
+      const pdfDoc = await PDFDocument.create();
+      pdfDoc.registerFontkit(window.fontkit);
+      const font = await pdfDoc.embedFont(fontBytes, {subset: true});
 
-      const MARGIN = 40;
-      const pageW = pdf.internal.pageSize.getWidth();
-      let curY = MARGIN;
+      const PAGE_W = 595.28, PAGE_H = 841.89, MARGIN = 40;
+      const contentW = PAGE_W - MARGIN * 2;
 
-      pdf.setFontSize(15);
-      pdf.text(val('f_title') || '（タイトル未入力）', MARGIN, curY);
-      curY += 22;
+      let page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+      let curY = PAGE_H - MARGIN;
 
-      pdf.setFontSize(9);
+      function newPage(){
+        page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+        curY = PAGE_H - MARGIN;
+      }
+      function ensureSpace(neededHeight){
+        if(curY - neededHeight < MARGIN) newPage();
+      }
+      function drawText(text, x, y, size, color){
+        page.drawText(text || '', {x, y, size, font, color: color || rgb(0.09,0.08,0.1)});
+      }
+      function addLink(x, y, w, h, url){
+        const linkAnnotation = pdfDoc.context.obj({
+          Type: 'Annot', Subtype: 'Link',
+          Rect: [x, y, x + w, y + h],
+          Border: [0,0,0],
+          A: { Type:'Action', S:'URI', URI: PDFString.of(url) }
+        });
+        const linkRef = pdfDoc.context.register(linkAnnotation);
+        const existing = page.node.Annots();
+        const arr = existing ? existing.asArray() : [];
+        page.node.set(PDFName.of('Annots'), pdfDoc.context.obj([...arr, linkRef]));
+      }
+
+      // タイトル
+      drawText(val('f_title') || '（タイトル未入力）', MARGIN, curY - 14, 15);
+      curY -= 30;
+
+      // メタ情報
       const metaLines = [];
       const dateJP = formatDateJP(val('f_date'));
       if(dateJP) metaLines.push(['日程', dateJP]);
@@ -2221,60 +2247,108 @@
       if(performersLine) metaLines.push(['出演者', performersLine]);
 
       metaLines.forEach(([label, text])=>{
-        pdf.text(`${label}：${text}`, MARGIN, curY);
-        curY += 14;
+        ensureSpace(14);
+        drawText(`${label}：${text}`, MARGIN, curY - 10, 9);
+        curY -= 14;
       });
 
+      // チケットURL（実リンク）
       const tickets = state.tickets.filter(t=>t.url);
       if(tickets.length){
-        pdf.text('チケット：', MARGIN, curY);
-        curY += 14;
+        ensureSpace(14);
+        drawText('チケット：', MARGIN, curY - 10, 9);
+        curY -= 14;
         tickets.forEach(t=>{
+          ensureSpace(13);
           const label = t.label ? `${t.label}: ` : '';
-          pdf.text(label, MARGIN + 10, curY);
-          pdf.textWithLink(t.url, MARGIN + 10 + pdf.getTextWidth(label), curY, {url: t.url});
-          curY += 13;
+          const full = label + t.url;
+          drawText(full, MARGIN + 10, curY - 9, 8.5, rgb(0.16,0.4,0.55));
+          const w = font.widthOfTextAtSize(full, 8.5);
+          addLink(MARGIN + 10, curY - 11, w, 12, t.url);
+          curY -= 13;
         });
       }
 
+      // 概要・注意事項・その他（単独URL行は実リンク）
       const overviewLines = val('f_overviewAll').split('\n').map(s=>s.trim()).filter(Boolean);
       if(overviewLines.length){
-        curY += 4;
+        curY -= 4;
         overviewLines.forEach(line=>{
+          ensureSpace(13);
           const urlMatch = line.match(/^(https?:\/\/\S+)$/);
+          const text = '・' + line;
+          drawText(text, MARGIN, curY - 9, 8.5, urlMatch ? rgb(0.16,0.4,0.55) : undefined);
           if(urlMatch){
-            pdf.textWithLink('・' + line, MARGIN, curY, {url: urlMatch[1]});
-          } else {
-            pdf.text('・' + line, MARGIN, curY);
+            const w = font.widthOfTextAtSize(text, 8.5);
+            addLink(MARGIN, curY - 11, w, 12, urlMatch[1]);
           }
-          curY += 13;
+          curY -= 13;
         });
       }
 
-      curY += 10;
+      curY -= 12;
 
+      // タイムテーブル（手動描画テーブル、自動ページ分割・ヘッダー再掲）
       const cols = previewColsList();
       const displayRows = getDisplayRows();
-      const head = [cols.map(c => c.label)];
-      const body = displayRows.map(r => cols.map(c=>{
-        if(c.compute) return c.compute(r) || '';
-        if(c.type === 'checkbox') return r[c.key] ? '〇' : '';
-        return r[c.key] || '';
-      }));
+      const weights = cols.map(c => c.key === 'name' ? 2 : 1);
+      const totalWeight = weights.reduce((a,b)=>a+b, 0);
+      const colWidths = weights.map(w => contentW * w / totalWeight);
+      const rowH = 16, headerH = 18;
 
-      pdf.autoTable({
-        startY: curY,
-        head, body,
-        styles: { font: 'NotoSansJP', fontSize: 8, cellPadding: 3 },
-        headStyles: { fillColor: [22,21,26], textColor: 255, font: 'NotoSansJP' },
-        margin: { left: MARGIN, right: MARGIN }
+      function drawTableHeader(){
+        ensureSpace(headerH);
+        page.drawRectangle({x: MARGIN, y: curY - headerH, width: contentW, height: headerH, color: rgb(0.086,0.082,0.102)});
+        let x = MARGIN;
+        cols.forEach((c,i)=>{
+          drawText(truncateToWidth(font, c.label, 7.5, colWidths[i]-6), x + 4, curY - headerH + 5, 7.5, rgb(1,1,1));
+          x += colWidths[i];
+        });
+        curY -= headerH;
+      }
+      drawTableHeader();
+
+      if(displayRows.length === 0){
+        ensureSpace(rowH);
+        drawText('タイムテーブルが未入力です', MARGIN + 4, curY - rowH + 5, 8);
+        curY -= rowH;
+      }
+
+      displayRows.forEach((r, rowIdx)=>{
+        if(curY - rowH < MARGIN){
+          newPage();
+          drawTableHeader();
+        }
+        if(rowIdx % 2 === 1){
+          page.drawRectangle({x: MARGIN, y: curY - rowH, width: contentW, height: rowH, color: rgb(0.97,0.96,0.94)});
+        }
+        let x = MARGIN;
+        cols.forEach((c,i)=>{
+          let cellVal;
+          if(c.compute) cellVal = c.compute(r) || '';
+          else if(c.type === 'checkbox') cellVal = r[c.key] ? '〇' : '';
+          else cellVal = r[c.key] || '';
+          drawText(truncateToWidth(font, String(cellVal), 7.5, colWidths[i]-6), x + 3, curY - rowH + 5, 7.5);
+          x += colWidths[i];
+        });
+        page.drawRectangle({x: MARGIN, y: curY - rowH, width: contentW, height: rowH, borderColor: rgb(0.81,0.78,0.72), borderWidth: 0.5});
+        curY -= rowH;
       });
 
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], {type:'application/pdf'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
       const title = val('f_title') || '概要書';
       const dateStr = document.getElementById('f_date').value;
-      const filename = dateStr ? `${dateStr}_${title}_text.pdf` : `${title}_text.pdf`;
-      pdf.save(filename);
-      statusEl.textContent = 'テキスト版PDFを書き出しました。';
+      a.download = dateStr ? `${dateStr}_${title}_text.pdf` : `${title}_text.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      statusEl.textContent = 'テキスト版PDF（pdf-lib版）を書き出しました。';
       statusEl.className = 'geo-status success';
     }catch(err){
       statusEl.textContent = '生成に失敗しました: ' + err.message + '（「PDFに書き出す」（画像版）をお試しください）';
