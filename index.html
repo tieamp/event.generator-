@@ -259,6 +259,14 @@
       </div>
       <div class="geo-status" id="savedStatus"></div>
       <div class="hint">お使いの端末にファイルとして保存されます。「PCに保存」でJSONファイルを書き出し、次回「PCから読み込む」でそのファイルを選ぶと、入力内容が復元されます。</div>
+
+      <div class="geo-btn-row" style="margin-top:10px;">
+        <button type="button" id="pickJsonSaveFolderBtn" class="btn-outline">📁 保存先フォルダを固定する</button>
+        <button type="button" id="clearJsonSaveFolderBtn" class="btn-outline">固定を解除</button>
+      </div>
+      <div class="hint" id="jsonSaveFolderLabel">未設定（毎回ダウンロード保存）</div>
+      <div class="hint" id="jsonSaveFolderUnsupported" style="display:none;color:var(--danger);">お使いのブラウザはこの機能に対応していません。PC版のChrome/Edgeでお試しください。</div>
+      <div class="hint">保存先フォルダを固定すると、以降「PCに保存」を押すたびにダイアログなしで自動的にそのフォルダへ書き込まれます。</div>
     </div>
 
     <div class="field-group">
@@ -426,11 +434,16 @@
           <button type="button" id="pickDestFolderBtn" class="btn-teal">コピー先フォルダを選択</button>
         </div>
         <div class="hint" id="destFolderLabel">未選択</div>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:#b9b4a6;font-weight:600;cursor:pointer;">
+          <input type="checkbox" id="estimateMicCheckbox">
+          🎤 顔検出でマイク本数を推定する（参考値・Chrome限定・処理に時間がかかります）
+        </label>
         <button type="button" id="runPhotoSortBtn" class="add-row-btn" style="margin-top:10px;">③出演者名で検索してコピー実行</button>
         <div class="geo-status" id="photoSortStatus"></div>
         <div id="photoSortResults" style="margin-top:8px;font-size:11.5px;line-height:1.6;"></div>
         <div class="hint">出演者欄のアーティスト名とファイル名を、記号・スペースを無視した部分一致で照合します。誤検出・見逃しがないか、最後に必ずコピー先フォルダをご確認ください。</div>
         <div class="hint">再実行すると、その時点の出演者リストに合わせてフォルダの中身も同期されます（出演者が減った場合は該当ファイルを削除、増えた場合は追加、写真が更新されていれば新しいものに置き換え）。このフォルダに手動で入れた無関係なファイルも削除対象になるのでご注意ください。</div>
+        <div class="hint">マイク本数推定は、コピーした写真から顔検出AIで人数を数え、タイムテーブルの「マイク」欄が空欄の場合のみ参考値として入力します。集合写真の写り方によっては数え間違いが起きるため、必ず最終確認をしてください（すでに入力済みの欄は上書きしません）。</div>
       </div>
     </div>
 
@@ -1467,12 +1480,28 @@
   }
 
   // ---------- JSON export / import (works without a Claude account) ----------
-  function exportEventJSON(){
+  let jsonSaveDirHandle = null;
+
+  async function exportEventJSON(){
     const snap = captureCurrentState();
     const title = snap.title || '概要書';
     const dateStr = snap.date || '';
     const filename = dateStr ? `${dateStr}_${title}.json` : `${title}.json`;
     const dataStr = JSON.stringify(snap, null, 2);
+
+    if(jsonSaveDirHandle){
+      try{
+        const fileHandle = await jsonSaveDirHandle.getFileHandle(filename, {create:true});
+        const writable = await fileHandle.createWritable();
+        await writable.write(dataStr);
+        await writable.close();
+        setSavedStatus(`「${filename}」を固定フォルダ（${jsonSaveDirHandle.name}）に保存しました。`, 'success');
+        return;
+      }catch(e){
+        setSavedStatus('固定フォルダへの保存に失敗したため、通常のダウンロードで保存します: ' + e.message, 'error');
+      }
+    }
+
     const blob = new Blob([dataStr], {type: 'application/json'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1484,6 +1513,26 @@
     URL.revokeObjectURL(url);
     setSavedStatus(`「${title}」をJSONファイルとして書き出しました。`, 'success');
   }
+
+  if(!window.showDirectoryPicker){
+    document.getElementById('jsonSaveFolderUnsupported').style.display = '';
+    document.getElementById('pickJsonSaveFolderBtn').disabled = true;
+    document.getElementById('clearJsonSaveFolderBtn').disabled = true;
+  } else {
+    document.getElementById('pickJsonSaveFolderBtn').addEventListener('click', async ()=>{
+      try{
+        jsonSaveDirHandle = await window.showDirectoryPicker({mode:'readwrite'});
+        document.getElementById('jsonSaveFolderLabel').textContent = `固定先: ${jsonSaveDirHandle.name}`;
+        setSavedStatus(`保存先フォルダを「${jsonSaveDirHandle.name}」に固定しました。以降、自動でこのフォルダに保存されます。`, 'success');
+      }catch(e){ /* user cancelled the picker */ }
+    });
+    document.getElementById('clearJsonSaveFolderBtn').addEventListener('click', ()=>{
+      jsonSaveDirHandle = null;
+      document.getElementById('jsonSaveFolderLabel').textContent = '未設定（毎回ダウンロード保存）';
+      setSavedStatus('保存先フォルダの固定を解除しました。', 'success');
+    });
+  }
+
   function importEventJSON(file){
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -1983,6 +2032,56 @@
     return files;
   }
 
+  // ---------- face detection for mic-count estimation (lazy-loaded, Chrome-friendly) ----------
+  function loadScriptOnce(src){
+    return new Promise((resolve, reject)=>{
+      if(document.querySelector(`script[src="${src}"]`)){ resolve(); return; }
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('顔検出ライブラリの読み込みに失敗しました'));
+      document.head.appendChild(s);
+    });
+  }
+  let blazefaceModelPromise = null;
+  async function ensureFaceModel(){
+    if(!blazefaceModelPromise){
+      blazefaceModelPromise = (async ()=>{
+        await loadScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js');
+        await loadScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.1.0/dist/blazeface.min.js');
+        return await blazeface.load();
+      })();
+    }
+    return blazefaceModelPromise;
+  }
+  async function countFacesInFile(file){
+    const model = await ensureFaceModel();
+    const imgUrl = URL.createObjectURL(file);
+    try{
+      const img = await new Promise((resolve, reject)=>{
+        const im = new Image();
+        im.onload = () => resolve(im);
+        im.onerror = reject;
+        im.src = imgUrl;
+      });
+      const predictions = await model.estimateFaces(img, false);
+      return predictions.length;
+    } finally {
+      URL.revokeObjectURL(imgUrl);
+    }
+  }
+  function applyMicCountToPerformer(performerName, count){
+    const combined = state.preRows.concat(state.rows);
+    let applied = false;
+    combined.forEach(r=>{
+      if((r.name||'').trim() === performerName.trim() && !r.mic){
+        r.mic = String(count);
+        applied = true;
+      }
+    });
+    return applied;
+  }
+
   async function runPhotoSort(){
     const statusEl = document.getElementById('photoSortStatus');
     const resultsEl = document.getElementById('photoSortResults');
@@ -2003,11 +2102,17 @@
       const imageFiles = await listImageFilesRecursive(photoSourceDirHandle);
       const newDirHandle = await photoDestRootDirHandle.getDirectoryHandle(folderName, {create:true});
       const performers = state.performers.filter(Boolean);
+      const estimateMic = document.getElementById('estimateMicCheckbox').checked;
 
       if(performers.length === 0){
         statusEl.textContent = '出演者が未入力です。出演者欄を入力してから実行してください。';
         statusEl.className = 'geo-status error';
         return;
+      }
+
+      if(estimateMic){
+        statusEl.textContent = '顔検出モデルを準備しています…（初回は時間がかかります）';
+        try{ await ensureFaceModel(); }catch(e){ /* 個別画像処理時にもエラーハンドリングされるため続行 */ }
       }
 
       const report = [];
@@ -2034,12 +2139,25 @@
           await writable.write(await chosen.file.arrayBuffer());
           await writable.close();
           totalCopied++;
-          report.push({
+          const reportEntry = {
             performer,
             status: tier === 'exact' ? 'found' : 'probable',
             file: chosen.name,
             candidateCount: candidates.length
-          });
+          };
+          if(estimateMic){
+            try{
+              const faceCount = await countFacesInFile(chosen.file);
+              if(faceCount > 0){
+                const applied = applyMicCountToPerformer(performer, faceCount);
+                reportEntry.micCount = faceCount;
+                reportEntry.micApplied = applied;
+              }
+            }catch(faceErr){
+              reportEntry.micError = faceErr.message;
+            }
+          }
+          report.push(reportEntry);
         }catch(err){
           report.push({performer, status:'error', message: err.message});
         }
@@ -2060,6 +2178,13 @@
       statusEl.textContent = `完了：「${folderName}」フォルダに ${totalCopied}枚コピーしました。${staleRemoved.length ? `（不要ファイル ${staleRemoved.length}件を削除）` : ''}`;
       statusEl.className = 'geo-status success';
 
+      function micNote(r){
+        if(r.micError) return `／顔検出失敗: ${escapeHtml(r.micError)}`;
+        if(r.micCount == null) return '';
+        if(r.micApplied) return `／🎤推定マイク本数 ${r.micCount}本を入力`;
+        return `／🎤推定${r.micCount}本（マイク欄が入力済みのため反映せず）`;
+      }
+
       resultsEl.innerHTML = report.map(r=>{
         if(r.status === 'notfound'){
           return `<div class="photo-report-row not-found">⚠ ${escapeHtml(r.performer)}：該当する写真が見つかりませんでした</div>`;
@@ -2069,12 +2194,17 @@
         }
         const multiNote = r.candidateCount > 1 ? `／候補${r.candidateCount}件中、最新の更新日時のものを採用` : '';
         if(r.status === 'probable'){
-          return `<div class="photo-report-row">🤔 ${escapeHtml(r.performer)}：完全一致なし、類似ファイルを採用 → ${escapeHtml(r.file)}${multiNote}</div>`;
+          return `<div class="photo-report-row">🤔 ${escapeHtml(r.performer)}：完全一致なし、類似ファイルを採用 → ${escapeHtml(r.file)}${multiNote}${micNote(r)}</div>`;
         }
-        return `<div class="photo-report-row">✔ ${escapeHtml(r.performer)}：${escapeHtml(r.file)}${multiNote}</div>`;
+        return `<div class="photo-report-row">✔ ${escapeHtml(r.performer)}：${escapeHtml(r.file)}${multiNote}${micNote(r)}</div>`;
       }).join('') + (staleRemoved.length
         ? `<div class="photo-report-row not-found">🗑 出演者リストに含まれないため削除：${escapeHtml(staleRemoved.join('、'))}</div>`
         : '');
+
+      if(estimateMic && report.some(r => r.micApplied)){
+        renderRowsForm();
+        renderPreview();
+      }
 
     }catch(err){
       statusEl.textContent = '処理に失敗しました: ' + err.message;
