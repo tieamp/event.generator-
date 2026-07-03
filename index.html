@@ -244,7 +244,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.1</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.2</span></h1>
   </div>
 </div>
 
@@ -1833,12 +1833,14 @@
     lines.push('―――――――――――');
     lines.push('タイムテーブル');
     lines.push('―――――――――――');
+    const nonPerformerKeywords = ['調整','休憩','OPEN','特典会','撤収','撤退','リハ','主催','準備'];
     let noNameCounter = 0;
     getDisplayRows().forEach(r=>{
+      const isSpecialRow = r.name && nonPerformerKeywords.some(k => r.name.includes(k));
       let displayName = r.name;
-      if(!displayName){
+      if(!isSpecialRow){
         noNameCounter++;
-        displayName = circledNumber(noNameCounter);
+        if(!displayName) displayName = circledNumber(noNameCounter);
       }
       let line = `${r.start||''}${r.end ? '-'+r.end : ''}　${displayName}`.trim();
       const merchText = composeMerch(r);
