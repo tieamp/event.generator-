@@ -388,7 +388,7 @@
       </div>
       <button type="button" class="add-row-btn" id="addRowBtn">＋ 行を追加</button>
       <button type="button" class="quick-add" id="addBreakBtn">＋【調整時間】を追加</button>
-      <div class="hint">終了時間・特典会終了時間の自動計算は「開始時間」を変更したときだけ行われます（持ち時間・物販/時間(分)だけを後から変更しても、確定済みの終了時間は自動で書き換わりません）。「楽屋/入何分前」「楽屋/出何分後」→楽屋の入り・退室時間は引き続き自動計算します（分数の入力欄はPDFには出力されません）。</div>
+      <div class="hint">終了時間・特典会終了時間の自動計算は「開始時間」を変更したときだけ行われます（持ち時間・物販/時間(分)だけを後から変更しても、確定済みの終了時間は自動で書き換わりません）。「楽屋/入何分前」→出演開始を基準に入室時間、「楽屋/出何分後」→物販終了時間（物販がない行は出演終了時間）を基準に退室時間を自動計算します（分数の入力欄はPDFには出力されません）。</div>
       <div class="hint">終了時間を確定（入力欄からフォーカスを外す）すると、次の枠の開始時間に自動的に反映されます。</div>
       <div class="hint">実際の時間差と持ち時間・物販時間の数値が一致しない場合、上に警告が表示されます。</div>
       <div class="hint">楽屋・車両・撮影可否・特典会ブースなどは、すべての行で未入力の場合PDF/プレビューの列ごと非表示になり、他の列が広く表示されます。</div>
@@ -601,8 +601,11 @@
     if(startMin != null && !isNaN(before)){
       row.dressingIn = minutesToTime(startMin - before);
     }
-    if(endMin != null && !isNaN(after)){
-      row.dressingOut = minutesToTime(endMin + after);
+    // 退室時間は「物販終了後」が基準。物販が設定されていない行は出演終了時間を代わりに使う。
+    const meetEndMin = timeToMinutes(row.meetEnd);
+    const outBaseMin = meetEndMin != null ? meetEndMin : endMin;
+    if(outBaseMin != null && !isNaN(after)){
+      row.dressingOut = minutesToTime(outBaseMin + after);
     }
   }
   function composeDressing(row){
@@ -1108,6 +1111,28 @@
     el.textContent = msg;
     el.className = 'geo-status ' + (type||'');
   }
+  // 物販の時間が重ならないよう、最小限のブース数で割り当てる（会議室割り当てと同じ貪欲法）
+  function assignMinimalBooths(rows){
+    const letters = ['A','B','C','D','E','F','G','H','I','J'];
+    const boothFreeAt = []; // 各ブースが空く時刻
+    rows.forEach(row=>{
+      const s = timeToMinutes(row.meetStart);
+      const e = timeToMinutes(row.meetEnd);
+      if(s == null || e == null) return;
+      let assigned = -1;
+      for(let i=0;i<boothFreeAt.length;i++){
+        if(boothFreeAt[i] <= s){ assigned = i; break; }
+      }
+      if(assigned === -1){
+        assigned = boothFreeAt.length;
+        boothFreeAt.push(0);
+      }
+      boothFreeAt[assigned] = e;
+      row.meetBooth = letters[assigned] || ('ブース' + (assigned + 1));
+    });
+    return boothFreeAt.length;
+  }
+
   function generateAutoTimetable(){
     const openT = document.getElementById('f_openTime').value;
     const startT = document.getElementById('f_startTime').value;
@@ -1176,7 +1201,6 @@
     state.preRows = [entryRow, rehearsalRow];
 
     // OPEN以降：バックトゥバックで組数分生成、物販は並行方式で自動計算
-    const boothLetters = ['A','B','C'];
     const newRows = [];
     let lastMerchEndActual = null;
     for(let i=0; i<N; i++){
@@ -1187,11 +1211,11 @@
       recalcEnd(row);
       row.meetOffsetMin = String(merchOffsetMin);
       row.meetDurationMin = String(merchMin);
-      row.meetBooth = boothLetters[i % boothLetters.length];
       recalcMeet(row, 'meetOffsetMin');
       newRows.push(row);
       lastMerchEndActual = timeToMinutes(row.meetEnd);
     }
+    const boothCount = assignMinimalBooths(newRows);
     state.rows = newRows;
 
     // 完全撤収マーカー行（実際の最終物販終了+40分）
@@ -1206,7 +1230,7 @@
     renderPreview();
 
     const teardownDisplay = teardownRow.start;
-    setAutoGenStatus(`${N}組で生成しました。開演${startT}〜最終物販終了${minutesToTime(lastMerchEndActual)}、完全撤収予定${teardownDisplay}。アーティスト名・マイク本数などは各行に入力してください。`, 'success');
+    setAutoGenStatus(`${N}組で生成しました（物販ブースは重複なしで最小の${boothCount}ブース）。開演${startT}〜最終物販終了${minutesToTime(lastMerchEndActual)}、完全撤収予定${teardownDisplay}。アーティスト名・マイク本数などは各行に入力してください。`, 'success');
   }
   document.getElementById('autoGenerateBtn').addEventListener('click', generateAutoTimetable);
 
