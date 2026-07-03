@@ -247,7 +247,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.1</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.2</span></h1>
   </div>
 </div>
 
@@ -2166,7 +2166,7 @@
   async function loadJapaneseFontBase64(){
     if(!notoFontBase64Promise){
       notoFontBase64Promise = (async ()=>{
-        const res = await fetch('https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf');
+        const res = await fetch('https://raw.githubusercontent.com/kongou-ae/font/master/NotoSansJP-Regular.ttf');
         if(!res.ok) throw new Error('フォントの取得に失敗しました（HTTP ' + res.status + '）');
         const buf = await res.arrayBuffer();
         return arrayBufferToBase64(buf);
@@ -2186,8 +2186,8 @@
       const fontBase64 = await loadJapaneseFontBase64();
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({orientation:'portrait', unit:'pt', format:'a4'});
-      pdf.addFileToVFS('NotoSansJP-Regular.otf', fontBase64);
-      pdf.addFont('NotoSansJP-Regular.otf', 'NotoSansJP', 'normal');
+      pdf.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64);
+      pdf.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal');
       pdf.setFont('NotoSansJP');
 
       btn.textContent = 'PDFを生成中…';
