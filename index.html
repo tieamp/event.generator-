@@ -246,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v3.7</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v4.0</span></h1>
   </div>
 </div>
 
@@ -397,7 +397,7 @@
       </div>
       <button type="button" class="add-row-btn" id="addRowBtn">＋ 行を追加</button>
       <button type="button" class="quick-add" id="addBreakBtn">＋【調整時間】を追加</button>
-      <div class="hint">終了時間・特典会終了時間の自動計算は「開始時間」を変更したときだけ行われます（持ち時間・物販/時間(分)だけを後から変更しても、確定済みの終了時間は自動で書き換わりません）。「楽屋/入何分前」→出演開始を基準に入室時間、「楽屋/出何分後」→物販終了時間（物販がない行は出演終了時間）を基準に退室時間を自動計算します（分数の入力欄はPDFには出力されません）。</div>
+      <div class="hint">開始時間・持ち時間のどちらを変更しても終了時間は自動計算されます。「楽屋/入何分前」→出演開始を基準に入室時間、「楽屋/出何分後」→物販終了時間（物販がない行は出演終了時間）を基準に退室時間を自動計算します（分数の入力欄はPDFには出力されません）。</div>
       <div class="hint">終了時間を確定（入力欄からフォーカスを外す）すると、次の枠の開始時間に自動的に反映されます。</div>
       <div class="hint">実際の時間差と持ち時間・物販時間の数値が一致しない場合、上に警告が表示されます。</div>
       <div class="hint">楽屋・車両・撮影可否・特典会ブースなどは、すべての行で未入力の場合PDF/プレビューの列ごと非表示になり、他の列が広く表示されます。</div>
@@ -1123,7 +1123,7 @@
     if(group === 'main' && idx === 0 && field === 'start'){ state.row0AutoSync = false; }
 
     let endMayHaveChanged = false;
-    if(field === 'start'){
+    if(field === 'start' || field === 'duration'){
       recalcEnd(row);
       updateCellValue(group, idx, 'end', row.end);
       recalcMeet(row, field);
@@ -1131,8 +1131,6 @@
       updateCellValue(group, idx, 'meetEnd', row.meetEnd);
       recalcDressing(row);
       endMayHaveChanged = true;
-    } else if(field === 'duration'){
-      // 持ち時間だけを変更しても終了時間は自動で書き換えない（開始時間の変更時のみ再計算）。矛盾があればアラートで検知する。
     } else if(field === 'end'){
       recalcMeet(row, field);
       updateCellValue(group, idx, 'meetStart', row.meetStart);
@@ -2099,7 +2097,7 @@
     btn.textContent = '生成中...';
     try{
       const sheet = document.getElementById('sheet');
-      const canvas = await html2canvas(sheet, {scale:3, backgroundColor:'#ffffff', useCORS:true});
+      const canvas = await html2canvas(sheet, {scale:4, backgroundColor:'#ffffff', useCORS:true});
       const { jsPDF } = window.jspdf;
 
       // A4サイズ(pt) と余白
@@ -2125,10 +2123,10 @@
         ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
         ctx.drawImage(canvas, 0, y, canvas.width, thisSliceHeightPx, 0, 0, canvas.width, thisSliceHeightPx);
 
-        const imgData = pageCanvas.toDataURL('image/png');
+        const imgData = pageCanvas.toDataURL('image/jpeg', 0.96);
         const imgHpt = thisSliceHeightPx / pxPerPt;
         if(pageIndex > 0) pdf.addPage([PAGE_W, PAGE_H], 'portrait');
-        pdf.addImage(imgData, 'PNG', MARGIN, MARGIN, availW, imgHpt);
+        pdf.addImage(imgData, 'JPEG', MARGIN, MARGIN, availW, imgHpt);
 
         y += thisSliceHeightPx;
         pageIndex++;
