@@ -35,8 +35,20 @@
   .brand-eyebrow{display:block;font-size:11px;letter-spacing:.18em;color:var(--amber);font-weight:800;margin-bottom:2px;}
   .brand h1{margin:0;font-size:20px;letter-spacing:.02em;font-weight:800;}
 
-  .layout{display:grid;grid-template-columns:minmax(360px, 480px) 1fr;gap:0;min-height:calc(100vh - 68px);}
-  @media (max-width:980px){.layout{grid-template-columns:1fr;}}
+  .layout{display:grid;grid-template-columns:440px 6px 1fr;gap:0;min-height:calc(100vh - 68px);}
+  @media (max-width:980px){
+    .layout{grid-template-columns:1fr;}
+    .panel-divider{display:none;}
+  }
+  .panel-divider{
+    background:#100f13;cursor:col-resize;position:relative;touch-action:none;
+  }
+  .panel-divider:hover, .panel-divider.is-dragging{background:var(--amber);}
+  .panel-divider::after{
+    content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:2px;height:36px;background:#4a4750;border-radius:2px;
+  }
+  .panel-divider:hover::after, .panel-divider.is-dragging::after{background:var(--ink);}
 
   .form-panel{background:#1c1b21;color:#e9e6dd;padding:22px;overflow-y:auto;max-height:calc(100vh - 68px);}
   .preview-panel{background:#0f0e12;padding:28px;overflow:auto;display:flex;justify-content:center;align-items:flex-start;}
@@ -194,9 +206,9 @@
   </div>
 </div>
 
-<div class="layout">
+<div class="layout" id="mainLayout">
   <!-- ========== FORM PANEL ========== -->
-  <div class="form-panel">
+  <div class="form-panel" id="formPanel">
 
     <div class="field-group">
       <h2>保存・読み込み（ローカルファイル）</h2>
@@ -420,8 +432,10 @@
     </div>
   </div>
 
+  <div class="panel-divider" id="panelDivider" title="ドラッグして幅を調整（ダブルクリックで元に戻す）"></div>
+
   <!-- ========== PREVIEW PANEL ========== -->
-  <div class="preview-panel">
+  <div class="preview-panel" id="previewPanel">
     <div class="sheet" id="sheet">
       <div class="sheet-header">
         <h2 class="sheet-title" id="p_title">（タイトル未入力）</h2>
@@ -2012,6 +2026,39 @@
       btn.textContent = originalText;
     }
   });
+
+  // ---------- resizable panels ----------
+  (function setupResizablePanels(){
+    const layout = document.getElementById('mainLayout');
+    const divider = document.getElementById('panelDivider');
+    if(!layout || !divider) return;
+    const DEFAULT_COLS = '440px 6px 1fr';
+    const MIN_W = 300, MAX_W = 900;
+    let dragging = false;
+
+    divider.addEventListener('pointerdown', e=>{
+      dragging = true;
+      divider.classList.add('is-dragging');
+      divider.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    divider.addEventListener('pointermove', e=>{
+      if(!dragging) return;
+      const rect = layout.getBoundingClientRect();
+      let newWidth = e.clientX - rect.left;
+      newWidth = Math.max(MIN_W, Math.min(MAX_W, newWidth));
+      layout.style.gridTemplateColumns = `${newWidth}px 6px 1fr`;
+    });
+    const stopDrag = ()=>{
+      dragging = false;
+      divider.classList.remove('is-dragging');
+    };
+    divider.addEventListener('pointerup', stopDrag);
+    divider.addEventListener('pointercancel', stopDrag);
+    divider.addEventListener('dblclick', ()=>{
+      layout.style.gridTemplateColumns = DEFAULT_COLS;
+    });
+  })();
 
   // ---------- initial load ----------
   (async function init(){
