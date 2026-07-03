@@ -246,7 +246,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v2.4</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v2.5</span></h1>
   </div>
 </div>
 
@@ -2086,6 +2086,9 @@
         im.onerror = reject;
         im.src = imgUrl;
       });
+      if(img.decode){
+        try{ await img.decode(); }catch(e){ /* decode失敗時もestimateFacesにフォールバックして続行 */ }
+      }
       const predictions = await model.estimateFaces(img, false);
       return predictions.length;
     } finally {
@@ -2172,10 +2175,9 @@
           if(estimateMic){
             try{
               const faceCount = await countFacesInFile(chosen.file);
+              reportEntry.micCount = faceCount;
               if(faceCount > 0){
-                const applied = applyMicCountToPerformer(performer, faceCount);
-                reportEntry.micCount = faceCount;
-                reportEntry.micApplied = applied;
+                reportEntry.micApplied = applyMicCountToPerformer(performer, faceCount);
               }
             }catch(faceErr){
               reportEntry.micError = faceErr.message;
@@ -2205,6 +2207,7 @@
       function micNote(r){
         if(r.micError) return `／顔検出失敗: ${escapeHtml(r.micError)}`;
         if(r.micCount == null) return '';
+        if(r.micCount === 0) return `／🎤顔を検出できませんでした（0人）`;
         if(r.micApplied) return `／🎤推定マイク本数 ${r.micCount}本を入力`;
         return `／🎤推定${r.micCount}本（マイク欄が入力済みのため反映せず）`;
       }
