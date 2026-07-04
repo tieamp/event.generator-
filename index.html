@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.8</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.9</span></h1>
   </div>
 </div>
 
@@ -1835,7 +1835,8 @@
       .filter(o => o.status !== 'declined' && o.name && o.name.trim())
       .map(o => o.name.trim())
       .join(' / ');
-    if(pendingOfferLine){
+    const greetingTypeForOffer = document.getElementById('f_greetingType').value;
+    if(pendingOfferLine && greetingTypeForOffer !== 'announce'){
       lines.push('');
       lines.push(`オファー中：${pendingOfferLine}`);
     }
