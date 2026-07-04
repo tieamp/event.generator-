@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v7.7</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v7.8</span></h1>
   </div>
 </div>
 
@@ -635,12 +635,15 @@
   // ---------- date / weekday formatting ----------
   function buildPriceDisplay(addYenPrefix){
     const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=>{
-      const amountText = p.amount ? (addYenPrefix ? '¥' + p.amount : p.amount) : '';
+      let amountText = p.amount || '';
+      if(amountText && addYenPrefix){
+        amountText = '¥' + amountText.replace(/円$/, '').trim();
+      }
       return [p.label, amountText].filter(Boolean).join(' ');
     });
     if(!priceLines.length) return '';
     let text = priceLines.join(' / ');
-    if(document.getElementById('f_oneDrink').checked) text += '　(D代別)';
+    if(document.getElementById('f_oneDrink').checked) text += '(D代別)';
     return text;
   }
   function formatDateJP(dateStr){
