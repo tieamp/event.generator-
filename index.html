@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v7.1</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v7.2</span></h1>
   </div>
 </div>
 
@@ -2327,12 +2327,13 @@
         return Math.max(w, MIN_COL_W);
       });
       const idealTotal = idealWidths.reduce((a,b)=>a+b, 0);
-      const scale = idealTotal > contentW ? contentW / idealTotal : 1;
+      const scale = contentW / idealTotal; // 余っていれば拡大、足りなければ縮小して必ずページ幅いっぱいに収める
       const colWidths = idealWidths.map(w => w * scale);
-      const scaledCellFontSize = scale < 1 ? cellFontSize * Math.max(scale, 0.7) : cellFontSize;
-      const scaledHeaderFontSize = scale < 1 ? headerFontSize * Math.max(scale, 0.7) : headerFontSize;
+      const scaledCellFontSize = scale < 1 ? cellFontSize * Math.max(scale, 0.7) : Math.min(cellFontSize * scale, cellFontSize * 1.35);
+      const scaledHeaderFontSize = scale < 1 ? headerFontSize * Math.max(scale, 0.7) : Math.min(headerFontSize * scale, headerFontSize * 1.35);
 
-      const rowH = 16, headerH = 18;
+      const heightScale = Math.max(1, scaledCellFontSize / cellFontSize);
+      const rowH = 16 * heightScale, headerH = 18 * heightScale;
       const measureAtSize = (t, s) => measureMixed(t, s);
 
       function drawColumnDividers(topY, height, color){
