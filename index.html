@@ -89,6 +89,12 @@
     width:100%;background:#100f13;border:1px solid #3a3841;color:#f2efe6;padding:8px 9px;border-radius:6px;font-size:13px;
   }
   select{appearance:auto;}
+  input[type=date]::-webkit-calendar-picker-indicator,
+  input[type=time]::-webkit-calendar-picker-indicator,
+  input[type=datetime-local]::-webkit-calendar-picker-indicator{
+    filter:invert(1) brightness(1.8);
+    cursor:pointer;
+  }
   textarea{resize:vertical;min-height:56px;line-height:1.5;}
   .hint{font-size:11px;color:#a39d8e;margin-top:3px;}
   .weekday-hint{font-size:11.5px;color:var(--amber);margin-top:3px;min-height:14px;}
@@ -244,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.2</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.3</span></h1>
   </div>
 </div>
 
