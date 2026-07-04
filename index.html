@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.7</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.8</span></h1>
   </div>
 </div>
 
@@ -2458,16 +2458,14 @@
           await wb.xlsx.load(buf);
         }
 
-        // シート名: MMDD + タイトル（Excelのシート名制限に合わせてサニタイズ、31文字まで、重複時は連番）
+        // シート名: MMDD + タイトル（Excelのシート名制限に合わせてサニタイズ、31文字まで）
         const dateStr = document.getElementById('f_date').value;
         const mmdd = dateStr ? dateStr.slice(5,7) + dateStr.slice(8,10) : '';
         const rawTitle = (val('f_title') || '無題').replace(/[:\\\/\?\*\[\]]/g, '');
-        let baseName = (mmdd + rawTitle).slice(0, 28) || 'イベント';
-        let sheetName = baseName, suffix = 2;
-        while(wb.getWorksheet(sheetName)){
-          sheetName = baseName.slice(0, 28 - String(suffix).length - 1) + '_' + suffix;
-          suffix++;
-        }
+        const sheetName = (mmdd + rawTitle).slice(0, 31) || 'イベント';
+        // 同名のシート（同じ日付・タイトルのイベント）が既にある場合は上書きする
+        const existingWs = wb.getWorksheet(sheetName);
+        if(existingWs) wb.removeWorksheet(existingWs.id);
         const ws = wb.addWorksheet(sheetName);
         // 30列目(AD列)にISO形式の日付を隠しメタデータとして保存(表示名に年が無くても正しく時系列で並び替えるため)
         ws.getCell(1, 30).value = dateStr || '9999-99-99';
@@ -2478,11 +2476,12 @@
           row.font = { bold: !!opts.bold, size: opts.size || 10 };
           row.eachCell({includeEmpty:true}, cell=>{ cell.border = ACCUM_BORDER; });
           if(opts.fullWidth) fullWidthRowNumbers.push(row.number);
+          if(opts.mergeValueFrom2) metaValueRowNumbers.push(row.number);
           return row;
         }
         function addBlank(){ ws.addRow([]); }
         function addMetaRow(label, text){
-          const row = addRow([label, text]);
+          const row = addRow([label, text], {mergeValueFrom2:true});
           row.getCell(1).font = { bold:true, size:9.5, color:{argb: ACCUM_COLOR.teal} };
           row.getCell(2).font = { size:10 };
         }
@@ -2493,6 +2492,7 @@
         }
 
         const fullWidthRowNumbers = [];
+        const metaValueRowNumbers = [];
         addRow([val('f_title') || '（タイトル未入力）'], {bold:true, size:14, fullWidth:true});
         addBlank();
 
@@ -2560,10 +2560,12 @@
         const widths = new Array(cols.length).fill(8);
         cols.forEach((c,i)=>{ widths[i] = Math.max(widths[i], textDisplayWidth(c.label)); });
         bodyRows.forEach(cells=> cells.forEach((v,i)=>{ widths[i] = Math.max(widths[i], textDisplayWidth(v)); }));
-        // タイトル・概要・出演者などの全幅行は列幅計算から除外し、代わりにセルを横結合して見た目を整える
+        // タイトル・概要・出演者などの全幅行、メタ行の値(B列)は列幅計算から除外し、代わりにセルを横結合して見た目を整える
         ws.eachRow((row, rowNumber)=>{
           if(fullWidthRowNumbers.includes(rowNumber)) return;
-          for(let colIdx = 1; colIdx <= 2; colIdx++){
+          const isMetaValueRow = metaValueRowNumbers.includes(rowNumber);
+          const maxCol = isMetaValueRow ? 1 : 2;
+          for(let colIdx = 1; colIdx <= maxCol; colIdx++){
             const v = row.getCell(colIdx).value;
             if(v) widths[colIdx-1] = Math.max(widths[colIdx-1] || 8, textDisplayWidth(String(v)));
           }
@@ -2574,6 +2576,9 @@
         const mergeSpan = Math.max(cols.length, 4);
         fullWidthRowNumbers.forEach(rowNumber=>{
           try{ ws.mergeCells(rowNumber, 1, rowNumber, mergeSpan); }catch(e){ /* すでに結合済みなら無視 */ }
+        });
+        metaValueRowNumbers.forEach(rowNumber=>{
+          try{ ws.mergeCells(rowNumber, 2, rowNumber, mergeSpan); }catch(e){ /* すでに結合済みなら無視 */ }
         });
 
         // 全シートを隠しメタデータ(ISO日付)の昇順に並び替え(新しい日付を必ず最後尾にする)
