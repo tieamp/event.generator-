@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.4</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.5</span></h1>
   </div>
 </div>
 
@@ -452,6 +452,18 @@
         <div class="hint">出演者欄のアーティスト名とファイル名を、記号・スペースを無視した部分一致で照合します。誤検出・見逃しがないか、最後に必ずコピー先フォルダをご確認ください。</div>
         <div class="hint">再実行すると、その時点の出演者リストに合わせてフォルダの中身も同期されます（出演者が減った場合は該当ファイルを削除、増えた場合は追加、写真が更新されていれば新しいものに置き換え）。このフォルダに手動で入れた無関係なファイルも削除対象になるのでご注意ください。</div>
       </div>
+    </div>
+
+    <div class="field-group">
+      <h2>イベント履歴の蓄積</h2>
+      <div class="hint">1つのスプレッドシートに、イベントごとの概要・出演者・オファー状況・タイムテーブルを1シートにまとめて追記していきます。初回にファイルを選ぶと、以降はそのファイルに追記され続けます（PC版のChrome/Edge限定）。</div>
+      <div class="geo-btn-row">
+        <button type="button" id="pickAccumFileBtn" class="btn-outline">📁 蓄積先ファイルを選択</button>
+        <button type="button" id="appendAccumBtn" class="add-row-btn">📥 このイベントを蓄積する</button>
+      </div>
+      <div class="hint" id="accumFileLabel">未選択（先にファイルを選択してください）</div>
+      <div class="hint" id="accumUnsupported" style="display:none;color:var(--danger);">お使いのブラウザはこの機能に対応していません。PC版のChrome/Edgeでお試しください。</div>
+      <div class="geo-status" id="accumStatus"></div>
     </div>
 
     <div class="actions">
@@ -2386,6 +2398,189 @@
       btn.textContent = originalText;
     }
   });
+
+  // ---------- accumulate event history into one spreadsheet ----------
+  function textDisplayWidth(str){
+    let w = 0;
+    for(const ch of String(str)){
+      const code = ch.codePointAt(0);
+      const isFullWidth = (code >= 0x1100 && code <= 0x115F) || code === 0x2329 || code === 0x232A ||
+        (code >= 0x2E80 && code <= 0xA4CF && code !== 0x303F) ||
+        (code >= 0xAC00 && code <= 0xD7A3) ||
+        (code >= 0xF900 && code <= 0xFAFF) ||
+        (code >= 0xFF00 && code <= 0xFF60) ||
+        (code >= 0xFFE0 && code <= 0xFFE6);
+      w += isFullWidth ? 2 : 1;
+    }
+    return w;
+  }
+  const ACCUM_COLOR = { ink:'FF16151A', teal:'FF2F5D62', borderLine:'FFCFCAC0', white:'FFFFFFFF' };
+  const ACCUM_BORDER = { top:{style:'thin',color:{argb:ACCUM_COLOR.borderLine}}, bottom:{style:'thin',color:{argb:ACCUM_COLOR.borderLine}}, left:{style:'thin',color:{argb:ACCUM_COLOR.borderLine}}, right:{style:'thin',color:{argb:ACCUM_COLOR.borderLine}} };
+
+  let accumFileHandle = null;
+
+  function setAccumStatus(msg, type){
+    const el = document.getElementById('accumStatus');
+    el.textContent = msg; el.className = 'geo-status ' + (type||'');
+  }
+
+  if(!window.showSaveFilePicker){
+    document.getElementById('accumUnsupported').style.display = '';
+    document.getElementById('pickAccumFileBtn').disabled = true;
+    document.getElementById('appendAccumBtn').disabled = true;
+  } else {
+    document.getElementById('pickAccumFileBtn').addEventListener('click', async ()=>{
+      try{
+        accumFileHandle = await window.showSaveFilePicker({
+          suggestedName: 'イベント蓄積.xlsx',
+          types: [{description:'Excelファイル', accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]
+        });
+        document.getElementById('accumFileLabel').textContent = `蓄積先: ${accumFileHandle.name}`;
+        setAccumStatus(`「${accumFileHandle.name}」を蓄積先に設定しました。`, 'success');
+      }catch(e){ /* ユーザーがキャンセルした場合は何もしない */ }
+    });
+
+    document.getElementById('appendAccumBtn').addEventListener('click', async ()=>{
+      const btn = document.getElementById('appendAccumBtn');
+      const orig = btn.textContent;
+      if(!accumFileHandle){
+        setAccumStatus('先に「📁 蓄積先ファイルを選択」でファイルを選んでください。', 'error');
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = '処理中…';
+      try{
+        await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js');
+
+        const wb = new ExcelJS.Workbook();
+        const file = await accumFileHandle.getFile();
+        if(file.size > 0){
+          const buf = await file.arrayBuffer();
+          await wb.xlsx.load(buf);
+        }
+
+        // シート名: MMDD + タイトル（Excelのシート名制限に合わせてサニタイズ、31文字まで、重複時は連番）
+        const dateStr = document.getElementById('f_date').value;
+        const mmdd = dateStr ? dateStr.slice(5,7) + dateStr.slice(8,10) : '';
+        const rawTitle = (val('f_title') || '無題').replace(/[:\\\/\?\*\[\]]/g, '');
+        let baseName = (mmdd + rawTitle).slice(0, 28) || 'イベント';
+        let sheetName = baseName, suffix = 2;
+        while(wb.getWorksheet(sheetName)){
+          sheetName = baseName.slice(0, 28 - String(suffix).length - 1) + '_' + suffix;
+          suffix++;
+        }
+        const ws = wb.addWorksheet(sheetName);
+
+        function addRow(cells, opts){
+          const row = ws.addRow(cells);
+          opts = opts || {};
+          row.font = { bold: !!opts.bold, size: opts.size || 10 };
+          row.eachCell({includeEmpty:true}, cell=>{ cell.border = ACCUM_BORDER; });
+          return row;
+        }
+        function addBlank(){ ws.addRow([]); }
+        function addMetaRow(label, text){
+          const row = addRow([label, text]);
+          row.getCell(1).font = { bold:true, size:9.5, color:{argb: ACCUM_COLOR.teal} };
+          row.getCell(2).font = { size:10 };
+        }
+        function addSectionBadge(label){
+          const row = addRow([label], {bold:true});
+          row.getCell(1).fill = { type:'pattern', pattern:'solid', fgColor:{argb: ACCUM_COLOR.ink} };
+          row.getCell(1).font = { bold:true, size:9.5, color:{argb: ACCUM_COLOR.white} };
+        }
+
+        addRow([val('f_title') || '（タイトル未入力）'], {bold:true, size:14});
+        addBlank();
+
+        const dateJP = formatDateJP(val('f_date'));
+        if(dateJP) addMetaRow('日程', dateJP);
+        const venueName = val('f_venueName'), address = val('f_venueAddress');
+        if(venueName) addMetaRow('会場', address ? `${venueName} / ${address}` : venueName);
+        const openT = val('f_openTime'), startT = val('f_startTime');
+        const timeParts = [];
+        if(openT) timeParts.push('OPEN ' + openT);
+        if(startT) timeParts.push('START ' + startT);
+        if(timeParts.length) addMetaRow('時間', timeParts.join(' / '));
+        const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
+        if(priceLines.length) addMetaRow('価格', priceLines.join(' / '));
+        const entryOrderAccum = val('f_entryOrder');
+        if(entryOrderAccum) addMetaRow('入場順', entryOrderAccum);
+        state.tickets.filter(t=>t.url).forEach(t=>{
+          addMetaRow('チケット', t.label ? `${t.label}: ${t.url}` : t.url);
+        });
+
+        addBlank();
+        addSectionBadge('出演者（確定）');
+        const performersLine = state.performers.filter(Boolean).join(' / ');
+        addRow([performersLine || '（未入力）']);
+
+        const pendingOffers = state.offers.filter(o=>o.status !== 'declined' && o.name && o.name.trim());
+        const declinedOffers = state.offers.filter(o=>o.status === 'declined' && o.name && o.name.trim());
+        if(pendingOffers.length || declinedOffers.length){
+          addBlank();
+          addSectionBadge('オファー状況');
+          if(pendingOffers.length) addMetaRow('オファー中', pendingOffers.map(o=>o.name).join(' / '));
+          if(declinedOffers.length) addMetaRow('オファーNG', declinedOffers.map(o=>o.name).join(' / '));
+        }
+
+        const overviewLines = val('f_overviewAll').split('\n').map(s=>s.trim()).filter(Boolean);
+        if(overviewLines.length){
+          addBlank();
+          addSectionBadge('概要・注意事項・その他');
+          overviewLines.forEach(l=> addRow(['・' + l]));
+        }
+
+        addBlank();
+        addSectionBadge('タイムテーブル');
+        const cols = previewColsList();
+        const headerRow = addRow(cols.map(c=>c.label), {bold:true});
+        headerRow.eachCell({includeEmpty:true}, cell=>{
+          cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb: ACCUM_COLOR.ink} };
+          cell.font = { bold:true, color:{argb: ACCUM_COLOR.white}, size:10 };
+        });
+        const displayRows = getDisplayRows();
+        const bodyRows = displayRows.map(r => cols.map(c=>{
+          if(c.compute) return c.compute(r) || '';
+          if(c.type === 'checkbox') return r[c.key] ? '〇' : '';
+          return r[c.key] || '';
+        }));
+        bodyRows.forEach((cells, idx) => {
+          const row = addRow(cells);
+          if(idx % 2 === 1){
+            row.eachCell({includeEmpty:true}, cell=>{
+              cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFF7F5F0'} };
+            });
+          }
+        });
+
+        const widths = new Array(cols.length).fill(8);
+        cols.forEach((c,i)=>{ widths[i] = Math.max(widths[i], textDisplayWidth(c.label)); });
+        bodyRows.forEach(cells=> cells.forEach((v,i)=>{ widths[i] = Math.max(widths[i], textDisplayWidth(v)); }));
+        let maxFirstColWidth = widths[0];
+        ws.eachRow(row=>{
+          const v = row.getCell(1).value;
+          if(v) maxFirstColWidth = Math.max(maxFirstColWidth, textDisplayWidth(String(v)));
+        });
+        widths[0] = maxFirstColWidth;
+        ws.columns.forEach((col,i)=>{
+          col.width = Math.min(60, Math.max(6, Math.round(widths[i] * 0.62) + 3));
+        });
+
+        const buffer = await wb.xlsx.writeBuffer();
+        const writable = await accumFileHandle.createWritable();
+        await writable.write(buffer);
+        await writable.close();
+
+        setAccumStatus(`「${sheetName}」シートとして蓄積しました（${accumFileHandle.name}）。`, 'success');
+      }catch(err){
+        setAccumStatus('蓄積に失敗しました: ' + err.message, 'error');
+      }finally{
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+    });
+  }
 
   // ---------- resizable panels ----------
   (function setupResizablePanels(){
