@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v7.2</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v7.3</span></h1>
   </div>
 </div>
 
@@ -503,7 +503,18 @@
   <div class="modal-card">
     <h3>🪄 タイムテーブル案 自動生成</h3>
     <div class="hint">開演時間は基本情報欄の値を使います。OPEN以降のライブ・物販枠のみを生成します（OPEN前の主催入り・リハなどは対象外です）。</div>
-    <div class="row2">
+    <div class="field">
+      <label>計算方法</label>
+      <div style="display:flex;gap:16px;margin-top:4px;">
+        <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer;">
+          <input type="radio" name="autoGenMode" id="autoGenModeHours" value="hours" checked> 総時間から組数を計算
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer;">
+          <input type="radio" name="autoGenMode" id="autoGenModeCount" value="count"> 組数を指定して生成
+        </label>
+      </div>
+    </div>
+    <div class="row2" id="autoGenHoursField">
       <div class="field">
         <label>ライブ+物販 総時間（時間）</label>
         <input type="text" id="autoGenTotalHours" placeholder="例）3">
@@ -511,6 +522,16 @@
       <div class="field">
         <label>1組あたりの持ち時間（分）</label>
         <input type="text" id="autoGenPerformMin" placeholder="例）20">
+      </div>
+    </div>
+    <div class="row2" id="autoGenCountField" style="display:none;">
+      <div class="field">
+        <label>出演者数（組）</label>
+        <input type="text" id="autoGenGroupCount" placeholder="例）8">
+      </div>
+      <div class="field">
+        <label>1組あたりの持ち時間（分）</label>
+        <input type="text" id="autoGenPerformMinCount" placeholder="例）20">
       </div>
     </div>
     <div class="row2">
@@ -1283,18 +1304,10 @@
       setAutoGenStatus('先に基本情報の「開演時間」を入力してください。', 'error');
       return;
     }
-    const totalHours = parseFloat(document.getElementById('autoGenTotalHours').value);
-    const performMin = parseInt(document.getElementById('autoGenPerformMin').value, 10);
+    const isCountMode = document.getElementById('autoGenModeCount').checked;
+    const performMin = parseInt(document.getElementById(isCountMode ? 'autoGenPerformMinCount' : 'autoGenPerformMin').value, 10);
     const merchMin = parseInt(document.getElementById('autoGenMerchMin').value, 10);
     const merchOffsetMin = parseInt(document.getElementById('autoGenMerchOffsetMin').value, 10);
-    const values = {totalHours, performMin, merchMin, merchOffsetMin};
-    for(const k in values){
-      if(isNaN(values[k]) || values[k] < 0){
-        setAutoGenStatus('すべての項目に0以上の数値を入力してください。', 'error');
-        return;
-      }
-    }
-    const totalMin = Math.round(totalHours * 60);
 
     const startMin = timeToMinutes(startT);
     if(startMin == null){
@@ -1302,10 +1315,36 @@
       return;
     }
 
-    const N = Math.floor((totalMin - merchOffsetMin - merchMin) / performMin);
-    if(N < 1){
-      setAutoGenStatus('条件を満たす組数が1組も確保できません。時間・持ち時間の数値を見直してください。', 'error');
-      return;
+    let N;
+    if(isCountMode){
+      const groupCount = parseInt(document.getElementById('autoGenGroupCount').value, 10);
+      const values = {groupCount, performMin, merchMin, merchOffsetMin};
+      for(const k in values){
+        if(isNaN(values[k]) || values[k] < 0){
+          setAutoGenStatus('すべての項目に0以上の数値を入力してください。', 'error');
+          return;
+        }
+      }
+      if(groupCount < 1){
+        setAutoGenStatus('出演者数（組）は1以上を入力してください。', 'error');
+        return;
+      }
+      N = groupCount;
+    } else {
+      const totalHours = parseFloat(document.getElementById('autoGenTotalHours').value);
+      const values = {totalHours, performMin, merchMin, merchOffsetMin};
+      for(const k in values){
+        if(isNaN(values[k]) || values[k] < 0){
+          setAutoGenStatus('すべての項目に0以上の数値を入力してください。', 'error');
+          return;
+        }
+      }
+      const totalMin = Math.round(totalHours * 60);
+      N = Math.floor((totalMin - merchOffsetMin - merchMin) / performMin);
+      if(N < 1){
+        setAutoGenStatus('条件を満たす組数が1組も確保できません。時間・持ち時間の数値を見直してください。', 'error');
+        return;
+      }
     }
 
     if(!confirm(`${N}組でタイムテーブルを自動生成します。OPEN以降の既存のタイムテーブルは上書きされます（OPEN前は変更しません）。よろしいですか？`)) return;
@@ -1335,6 +1374,13 @@
     setAutoGenStatus(`${N}組で生成しました（物販ブースは重複なしで最小の${boothCount}ブース）。開演${startT}〜最終物販終了${minutesToTime(lastMerchEndActual)}。アーティスト名・マイク本数などは各行に入力してください。`, 'success');
   }
   document.getElementById('autoGenerateBtn').addEventListener('click', generateAutoTimetable);
+  ['autoGenModeHours','autoGenModeCount'].forEach(id=>{
+    document.getElementById(id).addEventListener('change', ()=>{
+      const isCountMode = document.getElementById('autoGenModeCount').checked;
+      document.getElementById('autoGenHoursField').style.display = isCountMode ? 'none' : '';
+      document.getElementById('autoGenCountField').style.display = isCountMode ? '' : 'none';
+    });
+  });
 
   document.getElementById('openAutoGenModalBtn').addEventListener('click', ()=>{
     setAutoGenStatus('', '');
@@ -2161,7 +2207,7 @@
     return runs;
   }
   // Helvetica(WinAnsi)がカバーしない文字(ギリシャ文字など)の最終手段の代替
-  const LATIN_FALLBACK_MAP = {'Λ':'A','λ':'a','Ω':'O','ω':'o','Σ':'S','σ':'s','Π':'P','π':'p','Δ':'D','δ':'d','Ψ':'Y','β':'b','Φ':'F','φ':'f'};
+  const LATIN_FALLBACK_MAP = {'Λ':'A','λ':'a','Ω':'O','ω':'o','Σ':'S','σ':'s','Π':'P','π':'p','Δ':'D','δ':'d','Ψ':'Y','β':'b','Φ':'F','φ':'f','→':'->','←':'<-','⇒':'=>','⇐':'<=','↑':'^','↓':'v','★':'*','☆':'*','♪':'*','−':'-','‐':'-'};
   function sanitizeLatinRun(text){
     let out = '';
     for(const ch of text){ out += LATIN_FALLBACK_MAP[ch] || ch; }
@@ -2211,19 +2257,36 @@
         if(curY - neededHeight < MARGIN) newPage();
       }
       // 文字種別ごとに自動でフォントを振り分けて描画
+      function safeWidthOfTextAtSize(f, t, size){
+        try{ return f.widthOfTextAtSize(t, size); }
+        catch(e){
+          const safe = [...t].map(ch=>{
+            try{ f.widthOfTextAtSize(ch, size); return ch; }catch(e2){ return '?'; }
+          }).join('');
+          return f.widthOfTextAtSize(safe, size);
+        }
+      }
       function measureMixed(text, size){
         return splitFontRuns(text).reduce((sum, run)=>{
           const t = run.jp ? run.text : sanitizeLatinRun(run.text);
           const f = run.jp ? jpFont : latinFont;
-          return sum + f.widthOfTextAtSize(t, size);
+          return sum + safeWidthOfTextAtSize(f, t, size);
         }, 0);
       }
       function drawMixedText(text, x, y, size, color){
         let curX = x;
         splitFontRuns(text).forEach(run=>{
-          const t = run.jp ? run.text : sanitizeLatinRun(run.text);
+          let t = run.jp ? run.text : sanitizeLatinRun(run.text);
           const f = run.jp ? jpFont : latinFont;
-          page.drawText(t, {x: curX, y, size, font: f, color: color || rgb(0.09,0.08,0.1)});
+          try{
+            page.drawText(t, {x: curX, y, size, font: f, color: color || rgb(0.09,0.08,0.1)});
+          }catch(e){
+            // フォントで表現できない未知の記号は安全のため?に置き換えて再試行する
+            t = [...t].map(ch=>{
+              try{ f.widthOfTextAtSize(ch, size); return ch; }catch(e2){ return '?'; }
+            }).join('');
+            page.drawText(t, {x: curX, y, size, font: f, color: color || rgb(0.09,0.08,0.1)});
+          }
           curX += f.widthOfTextAtSize(t, size);
         });
         return curX - x;
