@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.9</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v7.0</span></h1>
   </div>
 </div>
 
@@ -2475,7 +2475,10 @@
           const row = ws.addRow(cells);
           opts = opts || {};
           row.font = { bold: !!opts.bold, size: opts.size || 10 };
-          row.eachCell({includeEmpty:true}, cell=>{ cell.border = ACCUM_BORDER; });
+          row.eachCell({includeEmpty:true}, cell=>{
+            cell.border = ACCUM_BORDER;
+            cell.alignment = { wrapText: true, vertical: 'top' };
+          });
           if(opts.fullWidth) fullWidthRowNumbers.push(row.number);
           if(opts.mergeValueFrom2) metaValueRowNumbers.push(row.number);
           return row;
@@ -2575,11 +2578,22 @@
           col.width = Math.min(60, Math.max(6, Math.round(widths[i] * 0.62) + 3));
         });
         const mergeSpan = Math.max(cols.length, 4);
+        const mergedColTotalWidth = ws.columns.slice(0, mergeSpan).reduce((sum,c)=> sum + (c.width || 8), 0);
+        function applyWrapAndHeight(rowNumber, startCol, fontSize){
+          const row = ws.getRow(rowNumber);
+          row.eachCell({includeEmpty:true}, cell=>{ cell.alignment = { wrapText: true, vertical: 'top' }; });
+          const text = String(row.getCell(startCol).value || '');
+          const availableCharWidth = mergedColTotalWidth * 1.5; // 安全側に余裕を持たせた概算値
+          const lineCount = Math.max(1, Math.ceil(textDisplayWidth(text) / availableCharWidth)) + 1;
+          row.height = lineCount * (fontSize || 10) * 1.4;
+        }
         fullWidthRowNumbers.forEach(rowNumber=>{
           try{ ws.mergeCells(rowNumber, 1, rowNumber, mergeSpan); }catch(e){ /* すでに結合済みなら無視 */ }
+          applyWrapAndHeight(rowNumber, 1, ws.getRow(rowNumber).font && ws.getRow(rowNumber).font.size);
         });
         metaValueRowNumbers.forEach(rowNumber=>{
           try{ ws.mergeCells(rowNumber, 2, rowNumber, mergeSpan); }catch(e){ /* すでに結合済みなら無視 */ }
+          applyWrapAndHeight(rowNumber, 2, 10);
         });
 
         // 全シートを隠しメタデータ(ISO日付)の昇順に並び替え(新しい日付を必ず最後尾にする)
