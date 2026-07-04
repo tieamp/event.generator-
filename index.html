@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v7.3</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v7.7</span></h1>
   </div>
 </div>
 
@@ -334,11 +334,15 @@
       <h2>価格</h2>
       <div id="pricesList"></div>
       <button type="button" class="add-mini-btn" id="addPriceBtn">＋ 価格種別を追加</button>
-      <div class="hint">「前売 / 女性 / 当日」のように「/」区切りで入力・貼り付けすると、自動的に複数行に分割されます（Enterキーでも分割できます／種別欄・金額欄どちらでも使えます）。</div>
+      <div class="hint">「前売 / 女性 / 当日」のように「/」区切りで入力・貼り付けすると、自動的に複数行に分割されます（Enterキーでも分割できます／種別欄・金額欄どちらでも使えます）。「一般 1000円/女性 500円」のように種別と金額をまとめて入力すると、自動でそれぞれの欄に振り分けられます。</div>
       <div class="field" style="margin-top:10px;">
         <label>入場順</label>
         <input type="text" id="f_entryOrder" placeholder="例）整理番号順 / 一般→女性→当日">
       </div>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:#b9b4a6;font-weight:600;cursor:pointer;">
+        <input type="checkbox" id="f_oneDrink" checked>
+        ワンドリンク制（ドリンク代別）
+      </label>
     </div>
 
     <div class="field-group">
@@ -629,6 +633,16 @@
   function rowHasData(r){ return Object.values(r).some(v => v !== '' && v !== false); }
 
   // ---------- date / weekday formatting ----------
+  function buildPriceDisplay(addYenPrefix){
+    const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=>{
+      const amountText = p.amount ? (addYenPrefix ? '¥' + p.amount : p.amount) : '';
+      return [p.label, amountText].filter(Boolean).join(' ');
+    });
+    if(!priceLines.length) return '';
+    let text = priceLines.join(' / ');
+    if(document.getElementById('f_oneDrink').checked) text += '　(D代別)';
+    return text;
+  }
   function formatDateJP(dateStr){
     if(!dateStr) return '';
     const d = new Date(dateStr+'T00:00:00');
@@ -922,6 +936,12 @@
           renderPreview();
         });
       }
+      function parsePricePart(part){
+        // 「前売¥1,900」「一般 1000円」のように種別+金額が1つのテキストに混在している場合を検出して分離する
+        const m = part.match(/^(.+?)[\s　]*[¥￥]?([0-9][0-9,]*)\s*円?$/);
+        if(m && m[1].trim()) return {label: m[1].trim(), amount: formatNumberComma(m[2])};
+        return null;
+      }
       const trySplitPrice = e=>{
         const value = e.target.value;
         if(!value.includes('/')) return;
@@ -931,6 +951,8 @@
         const otherField = field === 'label' ? 'amount' : 'label';
         const originalOther = state.prices[idx][otherField];
         const newEntries = parts.map((part, i)=>{
+          const combo = parsePricePart(part);
+          if(combo) return combo;
           const entry = {label:'', amount:''};
           entry[field] = field === 'amount' ? formatNumberComma(part) : part;
           if(i === 0) entry[otherField] = originalOther;
@@ -1399,12 +1421,14 @@
   ['f_title','f_announce','f_sale','f_overviewAll','f_entryOrder']
     .forEach(id=> document.getElementById(id).addEventListener('input', renderPreview));
   document.getElementById('f_greetingType').addEventListener('change', renderPreview);
+  document.getElementById('f_oneDrink').addEventListener('change', renderPreview);
 
   // ---------- reset ----------
   document.getElementById('resetBtn').addEventListener('click', ()=>{
     if(!confirm('入力内容をすべてリセットします。よろしいですか？（保存済みの会場住所帳・保存済みイベントは消えません）')) return;
     ['f_title','f_date','f_openTime','f_startTime','f_announce','f_sale','f_venueName','f_venueAddress','f_overviewAll','f_entryOrder']
       .forEach(id=> document.getElementById(id).value = '');
+    document.getElementById('f_oneDrink').checked = true;
     document.getElementById('f_greetingType').value = 'announce';
     document.getElementById('dateWeekdayHint').textContent = '';
     setGeoStatus('', '');
@@ -1439,6 +1463,7 @@
       venueAddress: val('f_venueAddress'),
       overviewAll: document.getElementById('f_overviewAll').value,
       entryOrder: document.getElementById('f_entryOrder').value,
+      oneDrink: document.getElementById('f_oneDrink').checked,
       greetingType: document.getElementById('f_greetingType').value,
       performers: state.performers,
       offers: state.offers,
@@ -1465,6 +1490,7 @@
       : [snap.overview, snap.links, snap.other].filter(Boolean).join('\n');
     document.getElementById('f_overviewAll').value = overviewAllValue;
     document.getElementById('f_entryOrder').value = snap.entryOrder || '';
+    document.getElementById('f_oneDrink').checked = !!snap.oneDrink;
     document.getElementById('f_greetingType').value = snap.greetingType || 'announce';
     document.getElementById('dateWeekdayHint').textContent = formatDateJP(snap.date || '');
 
@@ -1735,8 +1761,8 @@
     if(startT) timeParts.push('START ' + startT);
     if(timeParts.length) meta.push(['時間', timeParts.join(' / ')]);
 
-    const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
-    if(priceLines.length) meta.push(['価格', priceLines.join(' / ')]);
+    const priceDisplay = buildPriceDisplay();
+    if(priceDisplay) meta.push(['価格', priceDisplay]);
     const entryOrder = val('f_entryOrder');
     if(entryOrder) meta.push(['入場順', entryOrder]);
 
@@ -1854,8 +1880,8 @@
     if(startT) timeParts.push('START ' + startT);
     if(timeParts.length) lines.push(`時間：${timeParts.join(' / ')}`);
 
-    const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
-    if(priceLines.length) lines.push(`価格：${priceLines.join(' / ')}`);
+    const priceDisplayShare = buildPriceDisplay(true);
+    if(priceDisplayShare) lines.push(`価格：${priceDisplayShare}`);
     const entryOrderShare = val('f_entryOrder');
     if(entryOrderShare) lines.push(`入場順：${entryOrderShare}`);
 
@@ -2319,8 +2345,8 @@
       if(openT) timeParts.push('OPEN ' + openT);
       if(startT) timeParts.push('START ' + startT);
       if(timeParts.length) metaLines.push(['時間', timeParts.join(' / ')]);
-      const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
-      if(priceLines.length) metaLines.push(['価格', priceLines.join(' / ')]);
+      const priceDisplayPdf = buildPriceDisplay();
+      if(priceDisplayPdf) metaLines.push(['価格', priceDisplayPdf]);
       const entryOrderPdf = val('f_entryOrder');
       if(entryOrderPdf) metaLines.push(['入場順', entryOrderPdf]);
       const announceJP = formatDateTimeShortJP(val('f_announce'));
@@ -2573,8 +2599,8 @@
         if(openT) timeParts.push('OPEN ' + openT);
         if(startT) timeParts.push('START ' + startT);
         if(timeParts.length) addMetaRow('時間', timeParts.join(' / '));
-        const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=> [p.label, p.amount].filter(Boolean).join(' '));
-        if(priceLines.length) addMetaRow('価格', priceLines.join(' / '));
+        const priceDisplayAccum = buildPriceDisplay();
+        if(priceDisplayAccum) addMetaRow('価格', priceDisplayAccum);
         const entryOrderAccum = val('f_entryOrder');
         if(entryOrderAccum) addMetaRow('入場順', entryOrderAccum);
         state.tickets.filter(t=>t.url).forEach(t=>{
