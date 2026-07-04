@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.5</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.7</span></h1>
   </div>
 </div>
 
@@ -456,12 +456,12 @@
 
     <div class="field-group">
       <h2>イベント履歴の蓄積</h2>
-      <div class="hint">1つのスプレッドシートに、イベントごとの概要・出演者・オファー状況・タイムテーブルを1シートにまとめて追記していきます。初回にファイルを選ぶと、以降はそのファイルに追記され続けます（PC版のChrome/Edge限定）。</div>
+      <div class="hint">1つのスプレッドシートに、イベントごとの概要・出演者・オファー状況・タイムテーブルを1シートにまとめて追記していきます。フォルダを選ぶと、その中に自動で「制作履歴」フォルダを作成し、その中のファイルに蓄積し続けます（PC版のChrome/Edge限定）。シートは日付順に自動で並び替わります（新しい日付が常に最後尾）。</div>
       <div class="geo-btn-row">
-        <button type="button" id="pickAccumFileBtn" class="btn-outline">📁 蓄積先ファイルを選択</button>
+        <button type="button" id="pickAccumFileBtn" class="btn-outline">📁 イベント制作履歴蓄積先ファイルを選択</button>
         <button type="button" id="appendAccumBtn" class="add-row-btn">📥 このイベントを蓄積する</button>
       </div>
-      <div class="hint" id="accumFileLabel">未選択（先にファイルを選択してください）</div>
+      <div class="hint" id="accumFileLabel">未選択（先にフォルダを選択してください）</div>
       <div class="hint" id="accumUnsupported" style="display:none;color:var(--danger);">お使いのブラウザはこの機能に対応していません。PC版のChrome/Edgeでお試しください。</div>
       <div class="geo-status" id="accumStatus"></div>
     </div>
@@ -2424,19 +2424,18 @@
     el.textContent = msg; el.className = 'geo-status ' + (type||'');
   }
 
-  if(!window.showSaveFilePicker){
+  if(!window.showDirectoryPicker){
     document.getElementById('accumUnsupported').style.display = '';
     document.getElementById('pickAccumFileBtn').disabled = true;
     document.getElementById('appendAccumBtn').disabled = true;
   } else {
     document.getElementById('pickAccumFileBtn').addEventListener('click', async ()=>{
       try{
-        accumFileHandle = await window.showSaveFilePicker({
-          suggestedName: 'イベント蓄積.xlsx',
-          types: [{description:'Excelファイル', accept:{'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':['.xlsx']}}]
-        });
-        document.getElementById('accumFileLabel').textContent = `蓄積先: ${accumFileHandle.name}`;
-        setAccumStatus(`「${accumFileHandle.name}」を蓄積先に設定しました。`, 'success');
+        const parentDirHandle = await window.showDirectoryPicker({mode:'readwrite'});
+        const historyDirHandle = await parentDirHandle.getDirectoryHandle('制作履歴', {create:true});
+        accumFileHandle = await historyDirHandle.getFileHandle('イベント制作履歴.xlsx', {create:true});
+        document.getElementById('accumFileLabel').textContent = `蓄積先: ${parentDirHandle.name}/制作履歴/イベント制作履歴.xlsx`;
+        setAccumStatus(`「制作履歴」フォルダを準備しました。以降はここに蓄積されます。`, 'success');
       }catch(e){ /* ユーザーがキャンセルした場合は何もしない */ }
     });
 
@@ -2470,12 +2469,15 @@
           suffix++;
         }
         const ws = wb.addWorksheet(sheetName);
+        // 30列目(AD列)にISO形式の日付を隠しメタデータとして保存(表示名に年が無くても正しく時系列で並び替えるため)
+        ws.getCell(1, 30).value = dateStr || '9999-99-99';
 
         function addRow(cells, opts){
           const row = ws.addRow(cells);
           opts = opts || {};
           row.font = { bold: !!opts.bold, size: opts.size || 10 };
           row.eachCell({includeEmpty:true}, cell=>{ cell.border = ACCUM_BORDER; });
+          if(opts.fullWidth) fullWidthRowNumbers.push(row.number);
           return row;
         }
         function addBlank(){ ws.addRow([]); }
@@ -2485,12 +2487,13 @@
           row.getCell(2).font = { size:10 };
         }
         function addSectionBadge(label){
-          const row = addRow([label], {bold:true});
+          const row = addRow([label], {bold:true, fullWidth:true});
           row.getCell(1).fill = { type:'pattern', pattern:'solid', fgColor:{argb: ACCUM_COLOR.ink} };
           row.getCell(1).font = { bold:true, size:9.5, color:{argb: ACCUM_COLOR.white} };
         }
 
-        addRow([val('f_title') || '（タイトル未入力）'], {bold:true, size:14});
+        const fullWidthRowNumbers = [];
+        addRow([val('f_title') || '（タイトル未入力）'], {bold:true, size:14, fullWidth:true});
         addBlank();
 
         const dateJP = formatDateJP(val('f_date'));
@@ -2513,7 +2516,7 @@
         addBlank();
         addSectionBadge('出演者（確定）');
         const performersLine = state.performers.filter(Boolean).join(' / ');
-        addRow([performersLine || '（未入力）']);
+        addRow([performersLine || '（未入力）'], {fullWidth:true});
 
         const pendingOffers = state.offers.filter(o=>o.status !== 'declined' && o.name && o.name.trim());
         const declinedOffers = state.offers.filter(o=>o.status === 'declined' && o.name && o.name.trim());
@@ -2528,7 +2531,7 @@
         if(overviewLines.length){
           addBlank();
           addSectionBadge('概要・注意事項・その他');
-          overviewLines.forEach(l=> addRow(['・' + l]));
+          overviewLines.forEach(l=> addRow(['・' + l], {fullWidth:true}));
         }
 
         addBlank();
@@ -2557,17 +2560,37 @@
         const widths = new Array(cols.length).fill(8);
         cols.forEach((c,i)=>{ widths[i] = Math.max(widths[i], textDisplayWidth(c.label)); });
         bodyRows.forEach(cells=> cells.forEach((v,i)=>{ widths[i] = Math.max(widths[i], textDisplayWidth(v)); }));
-        let maxFirstColWidth = widths[0];
-        ws.eachRow(row=>{
-          const v = row.getCell(1).value;
-          if(v) maxFirstColWidth = Math.max(maxFirstColWidth, textDisplayWidth(String(v)));
+        // タイトル・概要・出演者などの全幅行は列幅計算から除外し、代わりにセルを横結合して見た目を整える
+        ws.eachRow((row, rowNumber)=>{
+          if(fullWidthRowNumbers.includes(rowNumber)) return;
+          for(let colIdx = 1; colIdx <= 2; colIdx++){
+            const v = row.getCell(colIdx).value;
+            if(v) widths[colIdx-1] = Math.max(widths[colIdx-1] || 8, textDisplayWidth(String(v)));
+          }
         });
-        widths[0] = maxFirstColWidth;
         ws.columns.forEach((col,i)=>{
           col.width = Math.min(60, Math.max(6, Math.round(widths[i] * 0.62) + 3));
         });
+        const mergeSpan = Math.max(cols.length, 4);
+        fullWidthRowNumbers.forEach(rowNumber=>{
+          try{ ws.mergeCells(rowNumber, 1, rowNumber, mergeSpan); }catch(e){ /* すでに結合済みなら無視 */ }
+        });
 
-        const buffer = await wb.xlsx.writeBuffer();
+        // 全シートを隠しメタデータ(ISO日付)の昇順に並び替え(新しい日付を必ず最後尾にする)
+        const sheetOrder = wb.worksheets.map(s=>{
+          const iso = s.getCell(1, 30).value;
+          return {name: s.name, iso: (typeof iso === 'string' && iso) ? iso : '0000-00-00'};
+        });
+        sheetOrder.sort((a,b)=> a.iso.localeCompare(b.iso));
+        const sortedWb = new ExcelJS.Workbook();
+        sheetOrder.forEach(entry=>{
+          const oldWs = wb.getWorksheet(entry.name);
+          const model = oldWs.model;
+          const newWs = sortedWb.addWorksheet(entry.name);
+          newWs.model = Object.assign({}, model, {id: newWs.id, name: entry.name});
+        });
+
+        const buffer = await sortedWb.xlsx.writeBuffer();
         const writable = await accumFileHandle.createWritable();
         await writable.write(buffer);
         await writable.close();
