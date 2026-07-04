@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.3</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v6.4</span></h1>
   </div>
 </div>
 
@@ -2181,7 +2181,7 @@
       const { PDFDocument, StandardFonts, rgb, PDFName, PDFString } = window.PDFLib;
       const pdfDoc = await PDFDocument.create();
       pdfDoc.registerFontkit(window.fontkit);
-      const jpFont = await pdfDoc.embedFont(fontBytes, {subset: true});
+      const jpFont = await pdfDoc.embedFont(fontBytes, {subset: false});
       const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
       const PAGE_W = 595.28, PAGE_H = 841.89, MARGIN = 40;
