@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.4</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.5</span></h1>
   </div>
 </div>
 
@@ -661,8 +661,8 @@
     return state.tickets.filter(t=>t.url).map(t=>{
       let line = `${t.label ? t.label+' ' : ''}${t.url}`;
       if(saleOptionOn && (t.saleStart || t.saleEnd)){
-        const startText = t.saleStart ? formatDateTimeShortJP(t.saleStart) : '未定';
-        const endText = t.saleEnd ? formatDateTimeShortJP(t.saleEnd) : '未定';
+        const startText = t.saleStart ? formatDateTimeShortJP(t.saleStart) : '';
+        const endText = t.saleEnd ? formatDateTimeShortJP(t.saleEnd) : '';
         line += `　(販売 ${startText}〜${endText})`;
       }
       return line;
@@ -2432,10 +2432,30 @@
       const performersLine = state.performers.filter(Boolean).join(' / ');
       if(performersLine) metaLines.push(`出演者：${performersLine}`);
 
+      function wrapTextBySeparator(text, maxWidth, size, sep){
+        sep = sep || ' / ';
+        if(measureMixed(text, size) <= maxWidth) return [text];
+        const parts = text.split(sep);
+        const lines = [];
+        let current = '';
+        parts.forEach(part=>{
+          const candidate = current ? current + sep + part : part;
+          if(measureMixed(candidate, size) > maxWidth && current){
+            lines.push(current);
+            current = part;
+          } else {
+            current = candidate;
+          }
+        });
+        if(current) lines.push(current);
+        return lines;
+      }
       metaLines.forEach(text=>{
-        ensureSpace(14);
-        drawMixedText(text, MARGIN, curY - 10, 9);
-        curY -= 14;
+        wrapTextBySeparator(text, contentW, 9).forEach(line=>{
+          ensureSpace(14);
+          drawMixedText(line, MARGIN, curY - 10, 9);
+          curY -= 14;
+        });
       });
 
       // チケットURL（実リンク、「チケット：ラベル: URL」の横一列表記、個別販売期間オプション対応）
@@ -2450,28 +2470,58 @@
         const urlW = measureMixed(t.url, 9);
         addLink(MARGIN + prefixW, curY - 12, urlW, 13, t.url);
         if(ticketSaleOptionOnPdf && (t.saleStart || t.saleEnd)){
-          const startText = t.saleStart ? formatDateTimeShortJP(t.saleStart) : '未定';
-          const endText = t.saleEnd ? formatDateTimeShortJP(t.saleEnd) : '未定';
+          const startText = t.saleStart ? formatDateTimeShortJP(t.saleStart) : '';
+          const endText = t.saleEnd ? formatDateTimeShortJP(t.saleEnd) : '';
           drawMixedText(`　(販売 ${startText}〜${endText})`, MARGIN + prefixW + urlW, curY - 10, 9);
         }
         curY -= 14;
       });
 
-      // 概要・注意事項・その他（単独URL行は実リンク）
+      // 概要・注意事項・その他（黒枠で囲み、単独URL行は実リンク、長い行は折り返し）
+      function wrapByChar(text, maxWidth, size){
+        const lines = [];
+        let current = '';
+        for(const ch of text){
+          const candidate = current + ch;
+          if(measureMixed(candidate, size) > maxWidth && current){
+            lines.push(current);
+            current = ch;
+          } else {
+            current = candidate;
+          }
+        }
+        if(current) lines.push(current);
+        return lines;
+      }
       const overviewLines = val('f_overviewAll').split('\n').map(s=>s.trim()).filter(Boolean);
       if(overviewLines.length){
         curY -= 4;
+        const OV_PAD = 8, OV_BODY_SIZE = 8.5, OV_LINE_H = 13, OV_HEADING_H = 18;
+        const wrappedItems = [];
         overviewLines.forEach(line=>{
-          ensureSpace(13);
           const urlMatch = line.match(/^(https?:\/\/\S+)$/);
           const text = '・' + line;
-          drawMixedText(text, MARGIN, curY - 9, 8.5, urlMatch ? rgb(0.16,0.4,0.55) : undefined);
-          if(urlMatch){
-            const w = measureMixed(text, 8.5);
-            addLink(MARGIN, curY - 11, w, 12, urlMatch[1]);
-          }
-          curY -= 13;
+          const wrapped = wrapByChar(text, contentW - OV_PAD*2, OV_BODY_SIZE);
+          wrapped.forEach((wline, i)=>{
+            wrappedItems.push({text: wline, url: (urlMatch && i===0) ? urlMatch[1] : null});
+          });
         });
+        const boxHeight = OV_PAD*2 + OV_HEADING_H + wrappedItems.length * OV_LINE_H;
+        if(curY - boxHeight < MARGIN) newPage();
+        const boxTop = curY;
+        page.drawRectangle({x: MARGIN, y: boxTop - boxHeight, width: contentW, height: boxHeight, borderColor: rgb(0.09,0.08,0.1), borderWidth: 1.2});
+        curY -= OV_PAD;
+        drawMixedText('概要・注意事項・その他', MARGIN + OV_PAD, curY - 9, 10);
+        curY -= OV_HEADING_H;
+        wrappedItems.forEach(item=>{
+          drawMixedText(item.text, MARGIN + OV_PAD, curY - 9, OV_BODY_SIZE, item.url ? rgb(0.16,0.4,0.55) : undefined);
+          if(item.url){
+            const w = measureMixed(item.text, OV_BODY_SIZE);
+            addLink(MARGIN + OV_PAD, curY - 11, w, 12, item.url);
+          }
+          curY -= OV_LINE_H;
+        });
+        curY -= OV_PAD;
       }
 
       curY -= 12;
