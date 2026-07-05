@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.6</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.7</span></h1>
   </div>
 </div>
 
@@ -1659,11 +1659,12 @@
   function checkConflicts(){
     const conflicts = [];
     const combined = state.preRows.concat(state.rows);
+    const combinedDisplayNames = buildRowDisplayNames(combined);
 
     const boothGroups = {};
     combined.forEach((r, idx)=>{
       if(r.meetBooth && r.meetStart && r.meetEnd){
-        (boothGroups[r.meetBooth] = boothGroups[r.meetBooth] || []).push({start:r.meetStart, end:r.meetEnd, name:r.name || `行${idx+1}`});
+        (boothGroups[r.meetBooth] = boothGroups[r.meetBooth] || []).push({start:r.meetStart, end:r.meetEnd, name:combinedDisplayNames[idx]});
       }
     });
     Object.entries(boothGroups).forEach(([booth, list])=>{
@@ -1682,7 +1683,7 @@
         const inT = r.dressingIn || r.start;
         const outT = r.dressingOut || r.end;
         if(inT && outT){
-          (roomGroups[r.dressingRoom] = roomGroups[r.dressingRoom] || []).push({start:inT, end:outT, name:r.name || `行${idx+1}`});
+          (roomGroups[r.dressingRoom] = roomGroups[r.dressingRoom] || []).push({start:inT, end:outT, name:combinedDisplayNames[idx]});
         }
       }
     });
@@ -1701,8 +1702,9 @@
   function checkTimeContradictions(){
     const issues = [];
     const combined = state.preRows.concat(state.rows);
+    const combinedDisplayNames = buildRowDisplayNames(combined);
     combined.forEach((r, idx)=>{
-      const label = r.name || `行${idx+1}`;
+      const label = combinedDisplayNames[idx];
 
       const sm = timeToMinutes(r.start), em = timeToMinutes(r.end);
       const dur = parseInt(r.duration, 10);
@@ -1734,13 +1736,14 @@
   function checkMerchCategoryConsistency(){
     const issues = [];
     const combined = state.preRows.concat(state.rows);
+    const combinedDisplayNames = buildRowDisplayNames(combined);
     ['終演後', '中物販'].forEach(category=>{
       const matches = combined.filter(r => r.meetStart && r.meetEnd && merchCategoryLabel(r) === category);
       if(matches.length < 2) return;
       const first = matches[0];
       const mismatches = matches.filter(r => r.meetStart !== first.meetStart || r.meetEnd !== first.meetEnd);
       if(mismatches.length){
-        const detail = matches.map((r, i) => `${r.name || `行${i+1}`}(${r.meetStart}-${r.meetEnd})`).join('、');
+        const detail = matches.map(r => `${combinedDisplayNames[combined.indexOf(r)]}(${r.meetStart}-${r.meetEnd})`).join('、');
         issues.push(`「${category}」の特典会時間が出演者間で揃っていません: ${detail}`);
       }
     });
@@ -1853,11 +1856,13 @@
     if(displayRows.length === 0){
       document.getElementById('previewBody').innerHTML = `<tr><td colspan="${cols.length}" class="empty-note">タイムテーブルが未入力です</td></tr>`;
     } else {
-      document.getElementById('previewBody').innerHTML = displayRows.map(r=>{
+      const previewDisplayNames = buildRowDisplayNames(displayRows);
+      document.getElementById('previewBody').innerHTML = displayRows.map((r, rIdx)=>{
         const rowCls = r._isOpen ? ' class="open-row"' : '';
         return `<tr${rowCls}>` + cols.map(c=>{
           let v;
-          if(c.compute){ v = c.compute(r); }
+          if(c.key === 'name'){ v = previewDisplayNames[rIdx]; }
+          else if(c.compute){ v = c.compute(r); }
           else if(c.type === 'checkbox'){ v = r[c.key] ? '〇' : ''; }
           else { v = r[c.key]; }
           const cls = c.key === 'name' ? ' class="name-cell"' : '';
@@ -1910,6 +1915,17 @@
     if(n >= 21 && n <= 35) return String.fromCodePoint(0x3251 + (n-21));
     if(n >= 36 && n <= 50) return String.fromCodePoint(0x32B1 + (n-36));
     return `(${n})`;
+  }
+  const NON_PERFORMER_KEYWORDS = ['調整','休憩','OPEN','特典会','撤収','撤退','リハ','主催','準備'];
+  // 出演者名が未入力の行を丸数字で連番表示するための対応表を作る（特殊な行は連番の対象外）
+  function buildRowDisplayNames(rows){
+    let counter = 0;
+    return rows.map(r=>{
+      const isSpecial = r.name && NON_PERFORMER_KEYWORDS.some(k => r.name.includes(k));
+      if(isSpecial) return r.name;
+      counter++;
+      return r.name || circledNumber(counter);
+    });
   }
   function generateShareText(){
     const lines = [];
@@ -1986,16 +2002,10 @@
     lines.push('―――――――――――');
     lines.push('タイムテーブル');
     lines.push('―――――――――――');
-    const nonPerformerKeywords = ['調整','休憩','OPEN','特典会','撤収','撤退','リハ','主催','準備'];
-    let noNameCounter = 0;
-    getDisplayRows().forEach(r=>{
-      const isSpecialRow = r.name && nonPerformerKeywords.some(k => r.name.includes(k));
-      let displayName = r.name;
-      if(!isSpecialRow){
-        noNameCounter++;
-        if(!displayName) displayName = circledNumber(noNameCounter);
-      }
-      let line = `${r.start||''}${r.end ? '-'+r.end : ''}　${displayName}`.trim();
+    const shareDisplayRows = getDisplayRows();
+    const shareDisplayNames = buildRowDisplayNames(shareDisplayRows);
+    shareDisplayRows.forEach((r, i)=>{
+      let line = `${r.start||''}${r.end ? '-'+r.end : ''}　${shareDisplayNames[i]}`.trim();
       const merchText = composeMerch(r);
       if(merchText){
         line += `　(${merchText})`;
@@ -2534,7 +2544,9 @@
       const headerFontSize = cellFontSize;
       const CELL_PAD = 6, MIN_COL_W = 26;
 
-      const rowCells = displayRows.map(r => cols.map(c=>{
+      const pdfDisplayNames = buildRowDisplayNames(displayRows);
+      const rowCells = displayRows.map((r, rIdx) => cols.map(c=>{
+        if(c.key === 'name') return pdfDisplayNames[rIdx] || '';
         if(c.compute) return c.compute(r) || '';
         if(c.type === 'checkbox') return r[c.key] ? '〇' : '';
         return String(r[c.key] || '');
@@ -2770,7 +2782,9 @@
           cell.font = { bold:true, color:{argb: ACCUM_COLOR.white}, size:10 };
         });
         const displayRows = getDisplayRows();
-        const bodyRows = displayRows.map(r => cols.map(c=>{
+        const accumDisplayNames = buildRowDisplayNames(displayRows);
+        const bodyRows = displayRows.map((r, rIdx) => cols.map(c=>{
+          if(c.key === 'name') return accumDisplayNames[rIdx] || '';
           if(c.compute) return c.compute(r) || '';
           if(c.type === 'checkbox') return r[c.key] ? '〇' : '';
           return r[c.key] || '';
