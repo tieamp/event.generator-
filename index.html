@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.1</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.2</span></h1>
   </div>
 </div>
 
@@ -426,7 +426,7 @@
           <option value="confirm">③タイムテーブル確定のご確認依頼</option>
           <option value="invite">④出演のお誘い（オファー用）</option>
         </select>
-        <div class="hint">②③には「タイムテーブルの確認後、修正がある場合は〇月〇日(〇)〇〇:〇〇までにご連絡ください」の一文が入ります。④は「〇月〇日(〇)頃までにご回答ください」という一文が入ります。〇の部分は書き出したテキスト内で直接ご入力ください。</div>
+        <div class="hint">②③には「タイムテーブルの確認後、修正がある場合は〇月〇日(〇)〇〇:〇〇までにご連絡ください」の一文が入ります。④は「〇月〇日(〇)頃までにご回答ください」という一文が入ります。〇の部分は書き出したテキスト内で直接ご入力ください。③は文末に「タイムテーブル告知解禁日:◯月◯日(◯)◯:◯」も自動で追加されます。</div>
       </div>
       <textarea id="shareTextArea" readonly></textarea>
       <div class="geo-btn-row" style="margin-top:8px;">
@@ -511,14 +511,14 @@
       <label>計算方法</label>
       <div style="display:flex;gap:16px;margin-top:4px;">
         <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer;">
-          <input type="radio" name="autoGenMode" id="autoGenModeHours" value="hours" checked> 総時間から組数を計算
+          <input type="radio" name="autoGenMode" id="autoGenModeHours" value="hours"> 総時間から組数を計算
         </label>
         <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer;">
-          <input type="radio" name="autoGenMode" id="autoGenModeCount" value="count"> 組数を指定して生成
+          <input type="radio" name="autoGenMode" id="autoGenModeCount" value="count" checked> 組数を指定して生成
         </label>
       </div>
     </div>
-    <div class="row2" id="autoGenHoursField">
+    <div class="row2" id="autoGenHoursField" style="display:none;">
       <div class="field">
         <label>ライブ+物販 総時間（時間）</label>
         <input type="text" id="autoGenTotalHours" placeholder="例）3">
@@ -528,7 +528,7 @@
         <input type="text" id="autoGenPerformMin" placeholder="例）20">
       </div>
     </div>
-    <div class="row2" id="autoGenCountField" style="display:none;">
+    <div class="row2" id="autoGenCountField">
       <div class="field">
         <label>出演者数（組）</label>
         <input type="text" id="autoGenGroupCount" placeholder="例）8">
