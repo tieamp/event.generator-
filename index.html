@@ -69,8 +69,8 @@
     background:var(--ink);border-top:1px solid #2a2830;
   }
 
-  .form-panel{background:#1c1b21;color:#e9e6dd;padding:22px;overflow-y:auto;max-height:calc(100vh - 68px);overscroll-behavior:contain;}
-  .preview-panel{background:#0f0e12;padding:28px;overflow:auto;display:flex;justify-content:center;align-items:flex-start;overscroll-behavior:contain;}
+  .form-panel{background:#1c1b21;color:#e9e6dd;padding:22px;overflow-y:auto;max-height:calc(100vh - 68px);}
+  .preview-panel{background:#0f0e12;padding:28px;overflow:auto;display:flex;justify-content:center;align-items:flex-start;}
 
   .field-group{
     margin-bottom:16px;background:#201f26;border:3px solid var(--amber);border-radius:10px;
@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.9</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.0</span></h1>
   </div>
 </div>
 
@@ -2863,7 +2863,7 @@
   }
 
   // ---------- prevent horizontal overscroll from triggering browser back/forward navigation ----------
-  document.querySelectorAll('.rows-table-wrap, .preview-panel, .form-panel').forEach(el=>{
+  document.querySelectorAll('.rows-table-wrap').forEach(el=>{
     el.addEventListener('wheel', e=>{
       if(Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return; // 縦スクロールは対象外
       const atLeftEdge = el.scrollLeft <= 0;
