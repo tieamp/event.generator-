@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.0</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.1</span></h1>
   </div>
 </div>
 
@@ -2123,10 +2123,9 @@
       statusEl.className = 'geo-status error';
       return;
     }
-    const title = val('f_title') || '概要書';
     const dateStr = document.getElementById('f_date').value;
     const mmdd = dateStr ? dateStr.slice(5,7) + dateStr.slice(8,10) : '';
-    const folderName = sanitizeFolderName(mmdd ? `${mmdd}_${title}` : title);
+    const folderName = sanitizeFolderName(mmdd ? `${mmdd}_アー写` : 'アー写');
 
     statusEl.textContent = '写真を検索しています…';
     statusEl.className = 'geo-status loading';
