@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.2</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.4</span></h1>
   </div>
 </div>
 
@@ -350,6 +350,11 @@
       <div id="ticketsList"></div>
       <button type="button" class="add-mini-btn" id="addTicketBtn">＋ チケットURLを追加</button>
       <div class="hint">2部制などURLが複数ある場合は「ラベル」に①②等を入力してください</div>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:#b9b4a6;font-weight:600;cursor:pointer;">
+        <input type="checkbox" id="f_ticketSaleOption">
+        チケット種別ごとに販売開始・終了日時を個別に設定する
+      </label>
+      <div class="hint" id="ticketSaleOptionHint" style="display:none;">オンにすると、各チケットの「販売開始」「販売終了」を個別に設定できます。基本情報欄の「販売開始」は使われなくなります。</div>
     </div>
 
     <div class="field-group">
@@ -573,7 +578,7 @@
     performers: [''],
     offers: [],
     prices: [{label:'', amount:''}],
-    tickets: [{label:'', url:''}],
+    tickets: [{label:'', url:'', saleStart:'', saleEnd:''}],
     preRows: [],
     rows: [],
     row0AutoSync: true,
@@ -651,6 +656,18 @@
     const d = new Date(dateStr+'T00:00:00');
     return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日(${DAYS[d.getDay()]})`;
   }
+  function buildTicketLines(){
+    const saleOptionOn = document.getElementById('f_ticketSaleOption').checked;
+    return state.tickets.filter(t=>t.url).map(t=>{
+      let line = `${t.label ? t.label+' ' : ''}${t.url}`;
+      if(saleOptionOn && (t.saleStart || t.saleEnd)){
+        const startText = t.saleStart ? formatDateTimeShortJP(t.saleStart) : '未定';
+        const endText = t.saleEnd ? formatDateTimeShortJP(t.saleEnd) : '未定';
+        line += `　(販売 ${startText}〜${endText})`;
+      }
+      return line;
+    });
+  }
   function formatDateTimeShortJP(dtStr){
     if(!dtStr) return '';
     const d = new Date(dtStr);
@@ -699,9 +716,10 @@
     const durMin = parseInt(row.meetDurationMin, 10);
     const offsetMin = parseInt(row.meetOffsetMin, 10);
     const endMin = timeToMinutes(row.end);
+    const isDirectMeetEdit = changedField === 'meetStart' || changedField === 'meetEnd';
 
-    if(!isNaN(offsetMin) && endMin != null){
-      // 「物販/後何分」がある場合は従来通り出演終了時間からの自動計算を優先
+    if(!isDirectMeetEdit && !isNaN(offsetMin) && endMin != null){
+      // 「物販/後何分」がある場合は従来通り出演終了時間からの自動計算を優先（直接編集時は除く）
       const startMin = endMin + offsetMin;
       row.meetStart = minutesToTime(startMin);
       if(!isNaN(durMin)){
@@ -994,6 +1012,7 @@
   // ---------- tickets list ----------
   function renderTicketsForm(){
     const wrap = document.getElementById('ticketsList');
+    const saleOptionOn = document.getElementById('f_ticketSaleOption').checked;
     wrap.innerHTML = state.tickets.map((t,idx)=>`
       <div class="list-row price-row">
         <input type="text" data-idx="${idx}" data-field="label" class="ticket-input" placeholder="ラベル（例：①）" value="${escapeAttr(t.label)}">
@@ -1003,7 +1022,18 @@
           <button type="button" class="icon-btn" data-act="down" data-idx="${idx}" title="下へ">↓</button>
           <button type="button" class="icon-btn danger" data-act="del" data-idx="${idx}" title="削除">✕</button>
         </div>
-      </div>`).join('');
+      </div>
+      ${saleOptionOn ? `
+      <div class="list-row" style="margin-top:-4px;margin-bottom:10px;">
+        <div class="field" style="margin-bottom:0;flex:1;">
+          <label style="font-size:10.5px;">販売開始</label>
+          <input type="datetime-local" data-idx="${idx}" data-field="saleStart" class="ticket-input" value="${escapeAttr(t.saleStart || '')}">
+        </div>
+        <div class="field" style="margin-bottom:0;flex:1;">
+          <label style="font-size:10.5px;">販売終了</label>
+          <input type="datetime-local" data-idx="${idx}" data-field="saleEnd" class="ticket-input" value="${escapeAttr(t.saleEnd || '')}">
+        </div>
+      </div>` : ''}`).join('');
     wrap.querySelectorAll('.ticket-input').forEach(inp=>{
       inp.addEventListener('input', e=>{
         const idx = +e.target.dataset.idx, field = e.target.dataset.field;
@@ -1014,7 +1044,7 @@
     wrap.querySelectorAll('button[data-act]').forEach(btn=>{
       btn.addEventListener('click', e=>{
         const idx = +e.currentTarget.dataset.idx, act = e.currentTarget.dataset.act;
-        if(act==='del'){ state.tickets.splice(idx,1); if(!state.tickets.length) state.tickets.push({label:'',url:''}); }
+        if(act==='del'){ state.tickets.splice(idx,1); if(!state.tickets.length) state.tickets.push({label:'',url:'',saleStart:'',saleEnd:''}); }
         else if(act==='up' && idx>0){ [state.tickets[idx-1], state.tickets[idx]] = [state.tickets[idx], state.tickets[idx-1]]; }
         else if(act==='down' && idx<state.tickets.length-1){ [state.tickets[idx+1], state.tickets[idx]] = [state.tickets[idx], state.tickets[idx+1]]; }
         renderTicketsForm();
@@ -1023,8 +1053,13 @@
     });
   }
   document.getElementById('addTicketBtn').addEventListener('click', ()=>{
-    state.tickets.push({label:'',url:''});
+    state.tickets.push({label:'',url:'',saleStart:'',saleEnd:''});
     renderTicketsForm();
+  });
+  document.getElementById('f_ticketSaleOption').addEventListener('change', ()=>{
+    document.getElementById('ticketSaleOptionHint').style.display = document.getElementById('f_ticketSaleOption').checked ? '' : 'none';
+    renderTicketsForm();
+    renderPreview();
   });
 
   // ---------- venue address book (no external network calls) ----------
@@ -1207,12 +1242,26 @@
       updateCellValue(group, idx, 'meetStart', row.meetStart);
       updateCellValue(group, idx, 'meetEnd', row.meetEnd);
     } else if(field === 'meetDurationMin'){
-      // 物販時間(分)だけを変更しても特典会終了時間は自動で書き換えない。矛盾があればアラートで検知する。
+      recalcMeet(row);
+      updateCellValue(group, idx, 'meetStart', row.meetStart);
+      updateCellValue(group, idx, 'meetEnd', row.meetEnd);
     } else if(field === 'meetStart'){
       recalcMeet(row, 'meetStart');
       updateCellValue(group, idx, 'meetEnd', row.meetEnd);
     } else if(field === 'meetEnd'){
-      // 特典会終了時間を直接編集しても特典会開始時間は自動で書き換えない。矛盾があればアラートで検知する。
+      recalcMeet(row, 'meetEnd');
+      updateCellValue(group, idx, 'meetStart', row.meetStart);
+    } else if(field === 'merchCategory'){
+      if(row.merchCategory === '終演後'){
+        const combined = state.preRows.concat(state.rows);
+        const master = combined.find(r => r !== row && r.meetStart && r.meetEnd && merchCategoryLabel(r) === '終演後');
+        if(master){
+          row.meetStart = master.meetStart;
+          row.meetEnd = master.meetEnd;
+          updateCellValue(group, idx, 'meetStart', row.meetStart);
+          updateCellValue(group, idx, 'meetEnd', row.meetEnd);
+        }
+      }
     } else if(field === 'dressingBeforeMin' || field === 'dressingAfterMin'){
       recalcDressing(row);
     }
@@ -1432,13 +1481,15 @@
     ['f_title','f_date','f_openTime','f_startTime','f_announce','f_sale','f_venueName','f_venueAddress','f_overviewAll','f_entryOrder']
       .forEach(id=> document.getElementById(id).value = '');
     document.getElementById('f_oneDrink').checked = true;
+    document.getElementById('f_ticketSaleOption').checked = false;
+    document.getElementById('ticketSaleOptionHint').style.display = 'none';
     document.getElementById('f_greetingType').value = 'announce';
     document.getElementById('dateWeekdayHint').textContent = '';
     setGeoStatus('', '');
     state.performers = [''];
     state.offers = [];
     state.prices = [{label:'',amount:''}];
-    state.tickets = [{label:'',url:''}];
+    state.tickets = [{label:'',url:'',saleStart:'',saleEnd:''}];
     state.preRows = [];
     state.rows = [blankRow()];
     state.row0AutoSync = true;
@@ -1467,6 +1518,7 @@
       overviewAll: document.getElementById('f_overviewAll').value,
       entryOrder: document.getElementById('f_entryOrder').value,
       oneDrink: document.getElementById('f_oneDrink').checked,
+      ticketSaleOption: document.getElementById('f_ticketSaleOption').checked,
       greetingType: document.getElementById('f_greetingType').value,
       performers: state.performers,
       offers: state.offers,
@@ -1494,13 +1546,15 @@
     document.getElementById('f_overviewAll').value = overviewAllValue;
     document.getElementById('f_entryOrder').value = snap.entryOrder || '';
     document.getElementById('f_oneDrink').checked = !!snap.oneDrink;
+    document.getElementById('f_ticketSaleOption').checked = !!snap.ticketSaleOption;
+    document.getElementById('ticketSaleOptionHint').style.display = snap.ticketSaleOption ? '' : 'none';
     document.getElementById('f_greetingType').value = snap.greetingType || 'announce';
     document.getElementById('dateWeekdayHint').textContent = formatDateJP(snap.date || '');
 
     state.performers = (snap.performers && snap.performers.length) ? snap.performers : [''];
     state.offers = snap.offers || [];
     state.prices = (snap.prices && snap.prices.length) ? snap.prices : [{label:'',amount:''}];
-    state.tickets = (snap.tickets && snap.tickets.length) ? snap.tickets : [{label:'',url:''}];
+    state.tickets = (snap.tickets && snap.tickets.length) ? snap.tickets : [{label:'',url:'',saleStart:'',saleEnd:''}];
     state.preRows = snap.preRows || [];
     state.rows = (snap.rows && snap.rows.length) ? snap.rows : [blankRow()];
     state.row0AutoSync = typeof snap.row0AutoSync === 'boolean' ? snap.row0AutoSync : true;
@@ -1769,10 +1823,7 @@
     const entryOrder = val('f_entryOrder');
     if(entryOrder) meta.push(['入場順', entryOrder]);
 
-    const ticketLines = state.tickets.filter(t=>t.url).map(t=>{
-      const labelPart = t.label ? escapeHtml(t.label)+': ' : '';
-      return `${labelPart}${escapeHtml(t.url)}`;
-    });
+    const ticketLines = buildTicketLines().map(l=> escapeHtml(l));
     if(ticketLines.length) meta.push(['チケット', ticketLines.join('\n'), true]);
 
     const announceJP = formatDateTimeShortJP(val('f_announce'));
@@ -1893,7 +1944,8 @@
     const announceJP = formatDateTimeShortJP(val('f_announce'));
     if(announceJP && greetingType === 'announce') lines.push(`告知解禁：${announceJP}`);
 
-    if(greetingType !== 'invite'){
+    const ticketSaleOptionOn = document.getElementById('f_ticketSaleOption').checked;
+    if(greetingType !== 'invite' && !ticketSaleOptionOn){
       const saleRaw = val('f_sale');
       if(saleRaw){
         const isSalePast = new Date(saleRaw) <= new Date();
@@ -1901,7 +1953,7 @@
       }
     }
 
-    const ticketLines = state.tickets.filter(t=>t.url).map(t=> `${t.label ? t.label+' ' : ''}${t.url}`);
+    const ticketLines = buildTicketLines();
     if(ticketLines.length){
       lines.push('');
       lines.push('チケット：');
@@ -2347,38 +2399,48 @@
 
       // タイトル
       drawMixedText(val('f_title') || '（タイトル未入力）', MARGIN, curY - 14, 15);
-      curY -= 30;
+      curY -= 22;
+      page.drawLine({start:{x: MARGIN, y: curY}, end:{x: PAGE_W - MARGIN, y: curY}, thickness: 1.5, color: rgb(0.09,0.08,0.1)});
+      curY -= 16;
 
-      // メタ情報
+      // メタ情報（日程+会場、告知解禁+販売開始はそれぞれ横一列にまとめる）
       const metaLines = [];
       const dateJP = formatDateJP(val('f_date'));
-      if(dateJP) metaLines.push(['日程', dateJP]);
       const venueName = val('f_venueName'), address = val('f_venueAddress');
-      if(venueName) metaLines.push(['会場', address ? `${venueName}（${address}）` : venueName]);
+      const dateVenueParts = [];
+      if(dateJP) dateVenueParts.push(`日程：${dateJP}`);
+      if(venueName) dateVenueParts.push(`会場：${address ? `${venueName}（${address}）` : venueName}`);
+      if(dateVenueParts.length) metaLines.push(dateVenueParts.join('　'));
+
       const openT = val('f_openTime'), startT = val('f_startTime');
       const timeParts = [];
       if(openT) timeParts.push('OPEN ' + openT);
       if(startT) timeParts.push('START ' + startT);
-      if(timeParts.length) metaLines.push(['時間', timeParts.join(' / ')]);
+      if(timeParts.length) metaLines.push(`時間：${timeParts.join(' / ')}`);
       const priceDisplayPdf = buildPriceDisplay();
-      if(priceDisplayPdf) metaLines.push(['価格', priceDisplayPdf]);
+      if(priceDisplayPdf) metaLines.push(`価格：${priceDisplayPdf}`);
       const entryOrderPdf = val('f_entryOrder');
-      if(entryOrderPdf) metaLines.push(['入場順', entryOrderPdf]);
-      const announceJP = formatDateTimeShortJP(val('f_announce'));
-      if(announceJP) metaLines.push(['告知解禁', announceJP]);
-      const saleJP = formatDateTimeShortJP(val('f_sale'));
-      if(saleJP) metaLines.push(['販売開始', saleJP]);
-      const performersLine = state.performers.filter(Boolean).join(' / ');
-      if(performersLine) metaLines.push(['出演者', performersLine]);
+      if(entryOrderPdf) metaLines.push(`入場順：${entryOrderPdf}`);
 
-      metaLines.forEach(([label, text])=>{
+      const announceJP = formatDateTimeShortJP(val('f_announce'));
+      const saleJP = formatDateTimeShortJP(val('f_sale'));
+      const announceSaleParts = [];
+      if(announceJP) announceSaleParts.push(`告知解禁：${announceJP}`);
+      if(saleJP) announceSaleParts.push(`販売開始：${saleJP}`);
+      if(announceSaleParts.length) metaLines.push(announceSaleParts.join('　'));
+
+      const performersLine = state.performers.filter(Boolean).join(' / ');
+      if(performersLine) metaLines.push(`出演者：${performersLine}`);
+
+      metaLines.forEach(text=>{
         ensureSpace(14);
-        drawMixedText(`${label}：${text}`, MARGIN, curY - 10, 9);
+        drawMixedText(text, MARGIN, curY - 10, 9);
         curY -= 14;
       });
 
-      // チケットURL（実リンク、「チケット：ラベル: URL」の横一列表記）
+      // チケットURL（実リンク、「チケット：ラベル: URL」の横一列表記、個別販売期間オプション対応）
       const tickets = state.tickets.filter(t=>t.url);
+      const ticketSaleOptionOnPdf = document.getElementById('f_ticketSaleOption').checked;
       tickets.forEach(t=>{
         ensureSpace(14);
         const prefix = 'チケット：' + (t.label ? `${t.label}: ` : '');
@@ -2387,6 +2449,11 @@
         drawMixedText(t.url, MARGIN + prefixW, curY - 10, 9, rgb(0.16,0.4,0.55));
         const urlW = measureMixed(t.url, 9);
         addLink(MARGIN + prefixW, curY - 12, urlW, 13, t.url);
+        if(ticketSaleOptionOnPdf && (t.saleStart || t.saleEnd)){
+          const startText = t.saleStart ? formatDateTimeShortJP(t.saleStart) : '未定';
+          const endText = t.saleEnd ? formatDateTimeShortJP(t.saleEnd) : '未定';
+          drawMixedText(`　(販売 ${startText}〜${endText})`, MARGIN + prefixW + urlW, curY - 10, 9);
+        }
         curY -= 14;
       });
 
@@ -2618,8 +2685,8 @@
         if(priceDisplayAccum) addMetaRow('価格', priceDisplayAccum);
         const entryOrderAccum = val('f_entryOrder');
         if(entryOrderAccum) addMetaRow('入場順', entryOrderAccum);
-        state.tickets.filter(t=>t.url).forEach(t=>{
-          addMetaRow('チケット', t.label ? `${t.label}: ${t.url}` : t.url);
+        buildTicketLines().forEach(l=>{
+          addMetaRow('チケット', l);
         });
 
         addBlank();
