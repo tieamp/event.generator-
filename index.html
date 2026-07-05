@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v7.8</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.0</span></h1>
   </div>
 </div>
 
@@ -1888,10 +1888,18 @@
     const entryOrderShare = val('f_entryOrder');
     if(entryOrderShare) lines.push(`入場順：${entryOrderShare}`);
 
+    const greetingType = document.getElementById('f_greetingType').value;
+
     const announceJP = formatDateTimeShortJP(val('f_announce'));
-    if(announceJP) lines.push(`告知解禁：${announceJP}`);
-    const saleJP = formatDateTimeShortJP(val('f_sale'));
-    if(saleJP) lines.push(`販売開始：${saleJP}`);
+    if(announceJP && greetingType === 'announce') lines.push(`告知解禁：${announceJP}`);
+
+    if(greetingType !== 'invite'){
+      const saleRaw = val('f_sale');
+      if(saleRaw){
+        const isSalePast = new Date(saleRaw) <= new Date();
+        lines.push(`販売開始：${isSalePast ? '販売中' : formatDateTimeShortJP(saleRaw)}`);
+      }
+    }
 
     const ticketLines = state.tickets.filter(t=>t.url).map(t=> `${t.label ? t.label+' ' : ''}${t.url}`);
     if(ticketLines.length){
@@ -1910,8 +1918,7 @@
       .filter(o => o.status !== 'declined' && o.name && o.name.trim())
       .map(o => o.name.trim())
       .join(' / ');
-    const greetingTypeForOffer = document.getElementById('f_greetingType').value;
-    if(pendingOfferLine && greetingTypeForOffer === 'invite'){
+    if(pendingOfferLine && greetingType === 'invite'){
       lines.push('');
       lines.push(`オファー中：${pendingOfferLine}`);
     }
@@ -1943,6 +1950,11 @@
       }
       lines.push(line);
     });
+
+    if(greetingType === 'confirm'){
+      lines.push('');
+      lines.push('タイムテーブル告知解禁日:◯月◯日(◯)◯:◯');
+    }
 
     return lines.join('\n');
   }
@@ -2113,7 +2125,8 @@
     }
     const title = val('f_title') || '概要書';
     const dateStr = document.getElementById('f_date').value;
-    const folderName = sanitizeFolderName(dateStr ? `${dateStr}_${title}` : title);
+    const mmdd = dateStr ? dateStr.slice(5,7) + dateStr.slice(8,10) : '';
+    const folderName = sanitizeFolderName(mmdd ? `${mmdd}_${title}` : title);
 
     statusEl.textContent = '写真を検索しています…';
     statusEl.className = 'geo-status loading';
