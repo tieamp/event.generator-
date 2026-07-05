@@ -69,8 +69,8 @@
     background:var(--ink);border-top:1px solid #2a2830;
   }
 
-  .form-panel{background:#1c1b21;color:#e9e6dd;padding:22px;overflow-y:auto;max-height:calc(100vh - 68px);}
-  .preview-panel{background:#0f0e12;padding:28px;overflow:auto;display:flex;justify-content:center;align-items:flex-start;}
+  .form-panel{background:#1c1b21;color:#e9e6dd;padding:22px;overflow-y:auto;max-height:calc(100vh - 68px);overscroll-behavior:contain;}
+  .preview-panel{background:#0f0e12;padding:28px;overflow:auto;display:flex;justify-content:center;align-items:flex-start;overscroll-behavior:contain;}
 
   .field-group{
     margin-bottom:16px;background:#201f26;border:3px solid var(--amber);border-radius:10px;
@@ -175,7 +175,7 @@
   .photo-report-row{padding:4px 0;border-bottom:1px solid #26242b;}
   .photo-report-row.not-found{color:#ffb9a8;}
 
-  .rows-table-wrap{overflow-x:auto;border:1px solid #3a3841;border-radius:8px;}
+  .rows-table-wrap{overflow-x:auto;border:1px solid #3a3841;border-radius:8px;overscroll-behavior-x:contain;}
   table.rows-edit{border-collapse:collapse;width:100%;font-size:12px;}
   table.rows-edit th{
     background:#100f13;color:var(--amber);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;
@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.7</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.8</span></h1>
   </div>
 </div>
 
