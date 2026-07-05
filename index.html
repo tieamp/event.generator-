@@ -250,7 +250,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.8</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v8.9</span></h1>
   </div>
 </div>
 
@@ -2861,6 +2861,18 @@
       }
     });
   }
+
+  // ---------- prevent horizontal overscroll from triggering browser back/forward navigation ----------
+  document.querySelectorAll('.rows-table-wrap, .preview-panel, .form-panel').forEach(el=>{
+    el.addEventListener('wheel', e=>{
+      if(Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return; // 縦スクロールは対象外
+      const atLeftEdge = el.scrollLeft <= 0;
+      const atRightEdge = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1;
+      if((atLeftEdge && e.deltaX < 0) || (atRightEdge && e.deltaX > 0)){
+        e.preventDefault();
+      }
+    }, {passive:false});
+  });
 
   // ---------- resizable panels ----------
   (function setupResizablePanels(){
