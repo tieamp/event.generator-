@@ -196,6 +196,7 @@
   }
   .add-row-btn:hover{background:rgba(232,163,61,.1);}
   .quick-add{margin-top:6px;background:transparent;border:1px solid #3a3841;color:#b9b4a6;padding:6px 10px;border-radius:6px;font-size:11.5px;}
+  .quick-add.is-active{background:rgba(232,163,61,.18);border-color:var(--amber);color:var(--amber);font-weight:700;}
 
   #shareTextArea{
     width:100%;min-height:280px;background:#100f13;border:1px solid #3a3841;color:#f2efe6;
@@ -250,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.0</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.2</span></h1>
   </div>
 </div>
 
@@ -553,6 +554,12 @@
         <input type="text" id="autoGenMerchOffsetMin" placeholder="例）15">
       </div>
     </div>
+    <div class="row2">
+      <div class="field">
+        <label>特典会ブース数</label>
+        <input type="text" id="autoGenBoothCount" placeholder="例）3">
+      </div>
+    </div>
     <div class="geo-status" id="autoGenStatus"></div>
     <div class="geo-btn-row" style="margin-top:12px;">
       <button type="button" class="btn-teal" id="autoGenerateBtn">この内容で生成</button>
@@ -576,6 +583,7 @@
 
   const state = {
     performers: [''],
+    performerConstraints: {},
     offers: [],
     prices: [{label:'', amount:''}],
     tickets: [{label:'', url:'', saleStart:'', saleEnd:''}],
@@ -809,18 +817,71 @@
     });
   }
 
+  let expandedConstraintIdx = null;
+  function formatConstraintLabel(c){
+    if(!c || !c.type) return '';
+    if(c.type === 'after') return `${c.after || '--:--'}以降の出演`;
+    if(c.type === 'before') return `${c.before || '--:--'}以前の出演`;
+    if(c.type === 'between') return `${c.after || '--:--'}以降〜${c.before || '--:--'}以前の出演`;
+    return '';
+  }
   function renderPerformersForm(){
     const wrap = document.getElementById('performersList');
-    wrap.innerHTML = state.performers.map((p,idx)=>`
+    wrap.innerHTML = state.performers.map((p,idx)=>{
+      const name = (p || '').trim();
+      const constraint = name ? state.performerConstraints[name] : null;
+      const hasConstraint = constraint && constraint.type;
+      const isExpanded = expandedConstraintIdx === idx;
+      const toggleLabel = hasConstraint ? `⏰ ${formatConstraintLabel(constraint)}` : '時間指定あり';
+      let editorHtml = '';
+      if(isExpanded){
+        const c = constraint || {type:'after', after:'', before:''};
+        editorHtml = `
+      <div class="list-row" style="margin-top:-4px;margin-bottom:10px;flex-wrap:wrap;">
+        <select data-idx="${idx}" class="performer-time-type" style="flex:1;min-width:170px;">
+          <option value="after" ${c.type==='after'?'selected':''}>〇時以降の出演</option>
+          <option value="before" ${c.type==='before'?'selected':''}>〇時以前の出演</option>
+          <option value="between" ${c.type==='between'?'selected':''}>〇時以降〜〇時以前の出演</option>
+        </select>
+        ${c.type!=='before' ? `<input type="time" data-idx="${idx}" data-field="after" class="performer-time-input" value="${escapeAttr(c.after||'')}">` : ''}
+        ${c.type!=='after' ? `<input type="time" data-idx="${idx}" data-field="before" class="performer-time-input" value="${escapeAttr(c.before||'')}">` : ''}
+        <button type="button" class="icon-btn danger" data-act="clearTime" data-idx="${idx}" title="時間指定を解除">✕</button>
+      </div>`;
+      }
+      return `
       <div class="list-row">
         <input type="text" data-idx="${idx}" class="performer-input" placeholder="出演者名" value="${escapeAttr(p)}">
+        <button type="button" class="quick-add${hasConstraint ? ' is-active' : ''}" data-act="toggleTime" data-idx="${idx}" style="flex-shrink:0;white-space:nowrap;">${toggleLabel}</button>
         <div class="rowbtns">
           <button type="button" class="icon-btn" data-act="up" data-idx="${idx}" title="上へ">↑</button>
           <button type="button" class="icon-btn" data-act="down" data-idx="${idx}" title="下へ">↓</button>
           <button type="button" class="icon-btn danger" data-act="del" data-idx="${idx}" title="削除">✕</button>
         </div>
-      </div>`).join('');
+      </div>${editorHtml}`;
+    }).join('');
     updatePerformerTimetableIndicators();
+    wrap.querySelectorAll('.performer-time-type').forEach(sel=>{
+      sel.addEventListener('change', e=>{
+        const idx = +e.target.dataset.idx;
+        const name = (state.performers[idx]||'').trim();
+        if(!name) return;
+        const existing = state.performerConstraints[name] || {};
+        state.performerConstraints[name] = { type: e.target.value, after: existing.after || '', before: existing.before || '' };
+        renderPerformersForm();
+        renderPreview();
+      });
+    });
+    wrap.querySelectorAll('.performer-time-input').forEach(inp=>{
+      inp.addEventListener('input', e=>{
+        const idx = +e.target.dataset.idx, field = e.target.dataset.field;
+        const name = (state.performers[idx]||'').trim();
+        if(!name) return;
+        if(!state.performerConstraints[name]) state.performerConstraints[name] = {type:'after', after:'', before:''};
+        state.performerConstraints[name][field] = e.target.value;
+        renderPreview();
+      });
+      inp.addEventListener('change', ()=> renderPerformersForm());
+    });
     wrap.querySelectorAll('.performer-input').forEach(inp=>{
       inp.addEventListener('input', e=>{
         state.performers[+e.target.dataset.idx] = e.target.value;
@@ -853,6 +914,12 @@
         if(act==='del'){ state.performers.splice(idx,1); if(!state.performers.length) state.performers.push(''); }
         else if(act==='up' && idx>0){ [state.performers[idx-1], state.performers[idx]] = [state.performers[idx], state.performers[idx-1]]; }
         else if(act==='down' && idx<state.performers.length-1){ [state.performers[idx+1], state.performers[idx]] = [state.performers[idx], state.performers[idx+1]]; }
+        else if(act==='toggleTime'){ expandedConstraintIdx = (expandedConstraintIdx === idx) ? null : idx; }
+        else if(act==='clearTime'){
+          const name = (state.performers[idx]||'').trim();
+          if(name) delete state.performerConstraints[name];
+          expandedConstraintIdx = null;
+        }
         renderPerformersForm();
         renderPreview();
       });
@@ -1350,27 +1417,6 @@
     el.textContent = msg;
     el.className = 'geo-status ' + (type||'');
   }
-  // 物販の時間が重ならないよう、最小限のブース数で割り当てる（会議室割り当てと同じ貪欲法）
-  function assignMinimalBooths(rows){
-    const letters = ['A','B','C','D','E','F','G','H','I','J'];
-    const boothFreeAt = []; // 各ブースが空く時刻
-    rows.forEach(row=>{
-      const s = timeToMinutes(row.meetStart);
-      const e = timeToMinutes(row.meetEnd);
-      if(s == null || e == null) return;
-      let assigned = -1;
-      for(let i=0;i<boothFreeAt.length;i++){
-        if(boothFreeAt[i] <= s){ assigned = i; break; }
-      }
-      if(assigned === -1){
-        assigned = boothFreeAt.length;
-        boothFreeAt.push(0);
-      }
-      boothFreeAt[assigned] = e;
-      row.meetBooth = letters[assigned] || ('ブース' + (assigned + 1));
-    });
-    return boothFreeAt.length;
-  }
 
   function generateAutoTimetable(){
     const startT = document.getElementById('f_startTime').value;
@@ -1382,6 +1428,11 @@
     const performMin = parseInt(document.getElementById(isCountMode ? 'autoGenPerformMinCount' : 'autoGenPerformMin').value, 10);
     const merchMin = parseInt(document.getElementById('autoGenMerchMin').value, 10);
     const merchOffsetMin = parseInt(document.getElementById('autoGenMerchOffsetMin').value, 10);
+    const boothCount = parseInt(document.getElementById('autoGenBoothCount').value, 10);
+    if(isNaN(boothCount) || boothCount < 1){
+      setAutoGenStatus('特典会ブース数は1以上を入力してください。', 'error');
+      return;
+    }
 
     const startMin = timeToMinutes(startT);
     if(startMin == null){
@@ -1426,6 +1477,7 @@
     // OPEN以降：バックトゥバックで組数分生成、物販は並行方式で自動計算
     const newRows = [];
     let lastMerchEndActual = null;
+    const boothLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
     for(let i=0; i<N; i++){
       const row = blankRow();
       const s = startMin + i*performMin;
@@ -1435,17 +1487,17 @@
       row.meetOffsetMin = String(merchOffsetMin);
       row.meetDurationMin = String(merchMin);
       recalcMeet(row, 'meetOffsetMin');
+      row.meetBooth = boothLetters[i % boothCount] || `ブース${(i % boothCount) + 1}`;
       newRows.push(row);
       lastMerchEndActual = timeToMinutes(row.meetEnd);
     }
-    const boothCount = assignMinimalBooths(newRows);
     state.rows = newRows;
     state.row0AutoSync = false;
 
     renderRowsForm();
     renderPreview();
 
-    setAutoGenStatus(`${N}組で生成しました（物販ブースは重複なしで最小の${boothCount}ブース）。開演${startT}〜最終物販終了${minutesToTime(lastMerchEndActual)}。アーティスト名・マイク本数などは各行に入力してください。`, 'success');
+    setAutoGenStatus(`${N}組で生成しました（特典会ブースはA〜${boothLetters[boothCount-1] || boothCount}の${boothCount}ブースを順番に割り当て）。開演${startT}〜最終物販終了${minutesToTime(lastMerchEndActual)}。アーティスト名・マイク本数などは各行に入力してください。時間が重なるブースがないか、上の警告欄も確認してください。`, 'success');
   }
   document.getElementById('autoGenerateBtn').addEventListener('click', generateAutoTimetable);
   ['autoGenModeHours','autoGenModeCount'].forEach(id=>{
@@ -1487,6 +1539,7 @@
     document.getElementById('dateWeekdayHint').textContent = '';
     setGeoStatus('', '');
     state.performers = [''];
+    state.performerConstraints = {};
     state.offers = [];
     state.prices = [{label:'',amount:''}];
     state.tickets = [{label:'',url:'',saleStart:'',saleEnd:''}];
@@ -1521,6 +1574,7 @@
       ticketSaleOption: document.getElementById('f_ticketSaleOption').checked,
       greetingType: document.getElementById('f_greetingType').value,
       performers: state.performers,
+      performerConstraints: state.performerConstraints,
       offers: state.offers,
       prices: state.prices,
       tickets: state.tickets,
@@ -1552,6 +1606,7 @@
     document.getElementById('dateWeekdayHint').textContent = formatDateJP(snap.date || '');
 
     state.performers = (snap.performers && snap.performers.length) ? snap.performers : [''];
+    state.performerConstraints = snap.performerConstraints || {};
     state.offers = snap.offers || [];
     state.prices = (snap.prices && snap.prices.length) ? snap.prices : [{label:'',amount:''}];
     state.tickets = (snap.tickets && snap.tickets.length) ? snap.tickets : [{label:'',url:'',saleStart:'',saleEnd:''}];
@@ -1750,9 +1805,36 @@
     return issues;
   }
 
+  function checkPerformerTimeConstraints(){
+    const issues = [];
+    const combined = state.preRows.concat(state.rows);
+    Object.keys(state.performerConstraints).forEach(name=>{
+      const c = state.performerConstraints[name];
+      if(!c || !c.type) return;
+      combined.forEach(r=>{
+        if((r.name||'').trim() !== name) return;
+        if(!r.start || !r.end) return;
+        const startMin = timeToMinutes(r.start), endMin = timeToMinutes(r.end);
+        if(startMin == null || endMin == null) return;
+        let ok = true;
+        if((c.type === 'after' || c.type === 'between') && c.after){
+          const afterMin = timeToMinutes(c.after);
+          if(afterMin != null && startMin < afterMin) ok = false;
+        }
+        if((c.type === 'before' || c.type === 'between') && c.before){
+          const beforeMin = timeToMinutes(c.before);
+          if(beforeMin != null && endMin > beforeMin) ok = false;
+        }
+        if(!ok){
+          issues.push(`${name}: 出演時間(${r.start}-${r.end})が指定条件「${formatConstraintLabel(c)}」を満たしていません`);
+        }
+      });
+    });
+    return issues;
+  }
   function renderConflicts(){
     const box = document.getElementById('conflictWarnings');
-    const issues = checkConflicts().concat(checkTimeContradictions()).concat(checkMerchCategoryConsistency());
+    const issues = checkConflicts().concat(checkTimeContradictions()).concat(checkMerchCategoryConsistency()).concat(checkPerformerTimeConstraints());
     if(issues.length === 0){ box.style.display = 'none'; box.innerHTML = ''; return; }
     box.style.display = 'block';
     box.innerHTML = '<strong>⚠ 確認が必要な項目があります</strong>' + issues.map(c=>escapeHtml(c)).join('<br>');
