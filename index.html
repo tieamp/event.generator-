@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.2</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.3</span></h1>
   </div>
 </div>
 
@@ -415,6 +415,7 @@
       <button type="button" class="add-row-btn" id="addRowBtn">＋ 行を追加</button>
       <button type="button" class="quick-add" id="addBreakBtn">＋【調整時間】を追加</button>
       <div class="hint">開始時間・持ち時間のどちらを変更しても終了時間は自動計算されます。「楽屋/入何分前」→出演開始を基準に入室時間、「楽屋/出何分後」→物販終了時間（物販がない行は出演終了時間）を基準に退室時間を自動計算します（分数の入力欄はPDFには出力されません）。</div>
+      <div class="hint">開始・終了・特典会の時間欄は「：」を省略して「1100」のように入力し、欄から出ると自動で「11:00」に変換されます。</div>
       <div class="hint">終了時間を確定（入力欄からフォーカスを外す）すると、次の枠の開始時間に自動的に反映されます。</div>
       <div class="hint">実際の時間差と持ち時間・物販時間の数値が一致しない場合、上に警告が表示されます。</div>
       <div class="hint">マイク・楽屋・車両・撮影可否・物販などは、すべての行で未入力の場合PDF/プレビューの列ごと非表示になり、他の列が広く表示されます。</div>
@@ -1280,11 +1281,24 @@
     }
   }
 
+  function autoFormatTimeValue(value){
+    if(/^\d{3,4}$/.test(value)){
+      const minutes = value.slice(-2);
+      const hours = value.slice(0, -2).padStart(2, '0');
+      return `${hours}:${minutes}`;
+    }
+    return value;
+  }
+  const TIME_FIELD_KEYS = ['start','end','meetStart','meetEnd'];
   function onRowFieldChange(e){
     const group = e.target.dataset.group;
     const idx = +e.target.dataset.idx, field = e.target.dataset.field;
     const arr = getGroupArray(group);
     const row = arr[idx];
+    if(e.type === 'change' && TIME_FIELD_KEYS.includes(field)){
+      const formatted = autoFormatTimeValue(e.target.value);
+      if(formatted !== e.target.value) e.target.value = formatted;
+    }
     row[field] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
 
     if(group === 'main' && idx === 0 && field === 'start'){ state.row0AutoSync = false; }
@@ -1857,9 +1871,9 @@
   function getDisplayRows(){
     const openRow = state.showOpenRow ? buildOpenRow() : null;
     const list = [];
-    state.preRows.forEach(r=>{ if(rowHasData(r)) list.push(r); });
+    state.preRows.forEach(r=>{ if(rowHasData(r)){ r._isPreRow = true; list.push(r); } });
     if(openRow) list.push(openRow);
-    state.rows.forEach(r=>{ if(rowHasData(r)) list.push(r); });
+    state.rows.forEach(r=>{ if(rowHasData(r)){ r._isPreRow = false; list.push(r); } });
     return list;
   }
 
@@ -2003,7 +2017,7 @@
   function buildRowDisplayNames(rows){
     let counter = 0;
     return rows.map(r=>{
-      const isSpecial = r.name && NON_PERFORMER_KEYWORDS.some(k => r.name.includes(k));
+      const isSpecial = r._isPreRow || (r.name && NON_PERFORMER_KEYWORDS.some(k => r.name.includes(k)));
       if(isSpecial) return r.name;
       counter++;
       return r.name || circledNumber(counter);
