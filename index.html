@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.3</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.4</span></h1>
   </div>
 </div>
 
@@ -297,6 +297,20 @@
         <div class="field">
           <label>開演時間</label>
           <input type="time" id="f_startTime">
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:8px;margin-bottom:8px;font-size:12px;color:#b9b4a6;font-weight:600;cursor:pointer;">
+        <input type="checkbox" id="f_twoPartShow">
+        1日で2部制にする（OPEN/START時間を2つ記載）
+      </label>
+      <div class="row2" id="twoPartFields" style="display:none;">
+        <div class="field">
+          <label>開場時間（第2部）</label>
+          <input type="time" id="f_openTime2">
+        </div>
+        <div class="field">
+          <label>開演時間（第2部）</label>
+          <input type="time" id="f_startTime2">
         </div>
       </div>
       <div class="row2">
@@ -647,6 +661,23 @@
   function rowHasData(r){ return Object.values(r).some(v => v !== '' && v !== false); }
 
   // ---------- date / weekday formatting ----------
+  function buildTimeDisplay(){
+    const isTwoPart = document.getElementById('f_twoPartShow').checked;
+    const openT = val('f_openTime'), startT = val('f_startTime');
+    const parts = [];
+    const part1 = [];
+    if(openT) part1.push('OPEN ' + openT);
+    if(startT) part1.push('START ' + startT);
+    if(part1.length) parts.push((isTwoPart ? '第1部 ' : '') + part1.join(' / '));
+    if(isTwoPart){
+      const openT2 = val('f_openTime2'), startT2 = val('f_startTime2');
+      const part2 = [];
+      if(openT2) part2.push('OPEN ' + openT2);
+      if(startT2) part2.push('START ' + startT2);
+      if(part2.length) parts.push('第2部 ' + part2.join(' / '));
+    }
+    return parts.join('　');
+  }
   function buildPriceDisplay(addYenPrefix){
     const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=>{
       let amountText = p.amount || '';
@@ -1540,13 +1571,20 @@
     .forEach(id=> document.getElementById(id).addEventListener('input', renderPreview));
   document.getElementById('f_greetingType').addEventListener('change', renderPreview);
   document.getElementById('f_oneDrink').addEventListener('change', renderPreview);
+  document.getElementById('f_twoPartShow').addEventListener('change', ()=>{
+    document.getElementById('twoPartFields').style.display = document.getElementById('f_twoPartShow').checked ? '' : 'none';
+    renderPreview();
+  });
+  ['f_openTime2','f_startTime2'].forEach(id=> document.getElementById(id).addEventListener('input', renderPreview));
 
   // ---------- reset ----------
   document.getElementById('resetBtn').addEventListener('click', ()=>{
     if(!confirm('入力内容をすべてリセットします。よろしいですか？（保存済みの会場住所帳・保存済みイベントは消えません）')) return;
-    ['f_title','f_date','f_openTime','f_startTime','f_announce','f_sale','f_venueName','f_venueAddress','f_overviewAll','f_entryOrder']
+    ['f_title','f_date','f_openTime','f_startTime','f_openTime2','f_startTime2','f_announce','f_sale','f_venueName','f_venueAddress','f_overviewAll','f_entryOrder']
       .forEach(id=> document.getElementById(id).value = '');
     document.getElementById('f_oneDrink').checked = true;
+    document.getElementById('f_twoPartShow').checked = false;
+    document.getElementById('twoPartFields').style.display = 'none';
     document.getElementById('f_ticketSaleOption').checked = false;
     document.getElementById('ticketSaleOptionHint').style.display = 'none';
     document.getElementById('f_greetingType').value = 'announce';
@@ -1578,6 +1616,9 @@
       date: document.getElementById('f_date').value,
       openTime: document.getElementById('f_openTime').value,
       startTime: document.getElementById('f_startTime').value,
+      twoPartShow: document.getElementById('f_twoPartShow').checked,
+      openTime2: document.getElementById('f_openTime2').value,
+      startTime2: document.getElementById('f_startTime2').value,
       announce: document.getElementById('f_announce').value,
       sale: document.getElementById('f_sale').value,
       venueName: val('f_venueName'),
@@ -1604,6 +1645,10 @@
     document.getElementById('f_date').value = snap.date || '';
     document.getElementById('f_openTime').value = snap.openTime || '';
     document.getElementById('f_startTime').value = snap.startTime || '';
+    document.getElementById('f_twoPartShow').checked = !!snap.twoPartShow;
+    document.getElementById('f_openTime2').value = snap.openTime2 || '';
+    document.getElementById('f_startTime2').value = snap.startTime2 || '';
+    document.getElementById('twoPartFields').style.display = snap.twoPartShow ? '' : 'none';
     document.getElementById('f_announce').value = snap.announce || '';
     document.getElementById('f_sale').value = snap.sale || '';
     document.getElementById('f_venueName').value = snap.venueName || '';
@@ -1911,11 +1956,8 @@
     const venueHtml = buildVenueHtml();
     if(venueHtml) meta.push(['会場', venueHtml, true]);
 
-    const openT = val('f_openTime'), startT = val('f_startTime');
-    const timeParts = [];
-    if(openT) timeParts.push('OPEN ' + openT);
-    if(startT) timeParts.push('START ' + startT);
-    if(timeParts.length) meta.push(['時間', timeParts.join(' / ')]);
+    const timeDisplay = buildTimeDisplay();
+    if(timeDisplay) meta.push(['時間', timeDisplay]);
 
     const priceDisplay = buildPriceDisplay();
     if(priceDisplay) meta.push(['価格', priceDisplay]);
@@ -2040,11 +2082,8 @@
     const venueName = val('f_venueName'), address = val('f_venueAddress');
     if(venueName) lines.push(`会場：${venueName}${address ? '（'+address+'）' : ''}`);
 
-    const openT = val('f_openTime'), startT = val('f_startTime');
-    const timeParts = [];
-    if(openT) timeParts.push('OPEN ' + openT);
-    if(startT) timeParts.push('START ' + startT);
-    if(timeParts.length) lines.push(`時間：${timeParts.join(' / ')}`);
+    const timeDisplayShare = buildTimeDisplay();
+    if(timeDisplayShare) lines.push(`時間：${timeDisplayShare}`);
 
     const priceDisplayShare = buildPriceDisplay(true);
     if(priceDisplayShare) lines.push(`価格：${priceDisplayShare}`);
@@ -2519,11 +2558,8 @@
       if(venueName) dateVenueParts.push(`会場：${address ? `${venueName}（${address}）` : venueName}`);
       if(dateVenueParts.length) metaLines.push(dateVenueParts.join('　'));
 
-      const openT = val('f_openTime'), startT = val('f_startTime');
-      const timeParts = [];
-      if(openT) timeParts.push('OPEN ' + openT);
-      if(startT) timeParts.push('START ' + startT);
-      if(timeParts.length) metaLines.push(`時間：${timeParts.join(' / ')}`);
+      const timeDisplayPdf = buildTimeDisplay();
+      if(timeDisplayPdf) metaLines.push(`時間：${timeDisplayPdf}`);
       const priceDisplayPdf = buildPriceDisplay();
       if(priceDisplayPdf) metaLines.push(`価格：${priceDisplayPdf}`);
       const entryOrderPdf = val('f_entryOrder');
@@ -2835,11 +2871,8 @@
         if(dateJP) addMetaRow('日程', dateJP);
         const venueName = val('f_venueName'), address = val('f_venueAddress');
         if(venueName) addMetaRow('会場', address ? `${venueName} / ${address}` : venueName);
-        const openT = val('f_openTime'), startT = val('f_startTime');
-        const timeParts = [];
-        if(openT) timeParts.push('OPEN ' + openT);
-        if(startT) timeParts.push('START ' + startT);
-        if(timeParts.length) addMetaRow('時間', timeParts.join(' / '));
+        const timeDisplayAccum = buildTimeDisplay();
+        if(timeDisplayAccum) addMetaRow('時間', timeDisplayAccum);
         const priceDisplayAccum = buildPriceDisplay();
         if(priceDisplayAccum) addMetaRow('価格', priceDisplayAccum);
         const entryOrderAccum = val('f_entryOrder');
