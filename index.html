@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.6</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.7</span></h1>
   </div>
 </div>
 
@@ -2000,9 +2000,23 @@
     });
     return issues;
   }
+  function checkPerformerTimeOverlap(){
+    const issues = [];
+    // OPEN前(主催入り・リハなど)やOPEN行は対象外にし、実際の出演枠同士だけを比較する
+    const performRows = state.rows.filter(r => r.name && r.start && r.end && !NON_PERFORMER_KEYWORDS.some(k => r.name.includes(k)));
+    for(let i=0;i<performRows.length;i++){
+      for(let j=i+1;j<performRows.length;j++){
+        const a = performRows[i], b = performRows[j];
+        if(timeRangesOverlap(a.start, a.end, b.start, b.end)){
+          issues.push(`出演時間が重複しています: ${a.name}(${a.start}-${a.end}) と ${b.name}(${b.start}-${b.end})`);
+        }
+      }
+    }
+    return issues;
+  }
   function renderConflicts(){
     const box = document.getElementById('conflictWarnings');
-    const issues = checkConflicts().concat(checkTimeContradictions()).concat(checkMerchCategoryConsistency()).concat(checkPerformerTimeConstraints());
+    const issues = checkConflicts().concat(checkTimeContradictions()).concat(checkMerchCategoryConsistency()).concat(checkPerformerTimeConstraints()).concat(checkPerformerTimeOverlap());
     if(issues.length === 0){ box.style.display = 'none'; box.innerHTML = ''; return; }
     box.style.display = 'block';
     box.innerHTML = '<strong>⚠ 確認が必要な項目があります</strong>' + issues.map(c=>escapeHtml(c)).join('<br>');
