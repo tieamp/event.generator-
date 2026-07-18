@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.8</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.9</span></h1>
   </div>
 </div>
 
@@ -1691,7 +1691,7 @@
     if(bracketMap['価格']){
       snap.prices = bracketMap['価格'].split('/').map(part=>{
         const pm = part.trim().match(/^(.+?)[\s　]*[¥￥]?([0-9][0-9,]*)\s*円?$/);
-        return pm ? {label: pm[1].trim(), amount: pm[2]} : {label: part.trim(), amount:''};
+        return pm ? {label: pm[1].trim(), amount: formatNumberComma(pm[2])} : {label: part.trim(), amount:''};
       }).filter(p=>p.label);
     }
 
