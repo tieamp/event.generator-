@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.4</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.6</span></h1>
   </div>
 </div>
 
@@ -276,6 +276,14 @@
       <div class="hint" id="jsonSaveFolderLabel">未設定（毎回ダウンロード保存）</div>
       <div class="hint" id="jsonSaveFolderUnsupported" style="display:none;color:var(--danger);">お使いのブラウザはこの機能に対応していません。PC版のChrome/Edgeでお試しください。</div>
       <div class="hint">保存先フォルダを固定すると、以降「PCに保存」を押すたびにダイアログなしで自動的にそのフォルダへ書き込まれます。</div>
+    </div>
+
+    <div class="field-group">
+      <h2>📋 テキストから読み込む</h2>
+      <div class="hint">「【日程】」「【タイトル】」のような形式の概要テキストを貼り付けると、各項目・タイムテーブルを自動で読み取ります。あくまで簡易的な自動抽出のため、読み込み後は必ず内容を確認・修正してください。既存の入力内容は上書きされます。</div>
+      <textarea id="f_importText" style="min-height:140px;" placeholder="【日程】〇月〇日(〇)&#10;【タイトル】〇〇〇〇&#10;【会場】〇〇〇〇&#10;【時間】OPEN 〇〇:〇〇 START 〇〇:〇〇&#10;【出演】出演者A/出演者B/出演者C&#10;【価格】一般¥〇,〇〇〇 / 女性¥〇,〇〇〇&#10;〇〇:〇〇-〇〇:〇〇 出演者A(終演後物販)&#10;〇〇:〇〇-〇〇:〇〇 出演者B(終演後物販)"></textarea>
+      <button type="button" id="importTextBtn" class="add-row-btn">この内容で読み込む</button>
+      <div class="geo-status" id="importTextStatus"></div>
     </div>
 
     <div class="field-group">
@@ -1639,6 +1647,107 @@
       showOpenRow: state.showOpenRow
     };
   }
+
+  // ---------- import from free-form text (best-effort parser) ----------
+  function parseImportedText(text){
+    const snap = {};
+    const lines = text.split('\n').map(l=>l.trim()).filter(l=>l);
+    const bracketMap = {};
+    lines.forEach(line=>{
+      const m = line.match(/^【(.+?)】\s*(.*)$/);
+      if(m) bracketMap[m[1]] = m[2].trim();
+    });
+
+    if(bracketMap['タイトル']) snap.title = bracketMap['タイトル'];
+    if(bracketMap['会場']) snap.venueName = bracketMap['会場'];
+
+    if(bracketMap['日程']){
+      const dm = bracketMap['日程'].match(/(\d{1,2})月(\d{1,2})日/);
+      if(dm){
+        const now = new Date();
+        let year = now.getFullYear();
+        const month = parseInt(dm[1],10), day = parseInt(dm[2],10);
+        const candidate = new Date(year, month-1, day);
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if(candidate < today) year++;
+        snap.date = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      }
+    }
+
+    const timeSourceText = bracketMap['時間'] || text;
+    const openM = timeSourceText.match(/OPEN\s*(\d{1,2}):?(\d{2})/);
+    const startM = timeSourceText.match(/START\s*(\d{1,2}):?(\d{2})/);
+    if(openM) snap.openTime = `${openM[1].padStart(2,'0')}:${openM[2]}`;
+    if(startM) snap.startTime = `${startM[1].padStart(2,'0')}:${startM[2]}`;
+
+    if(bracketMap['出演']){
+      snap.performers = bracketMap['出演'].split('/').map(s=>s.trim()).filter(Boolean);
+    }
+
+    if(bracketMap['価格']){
+      snap.prices = bracketMap['価格'].split('/').map(part=>{
+        const pm = part.trim().match(/^(.+?)[\s　]*[¥￥]?([0-9][0-9,]*)\s*円?$/);
+        return pm ? {label: pm[1].trim(), amount: pm[2]} : {label: part.trim(), amount:''};
+      }).filter(p=>p.label);
+    }
+
+    const rows = [];
+    lines.forEach(line=>{
+      if(/^【/.test(line)) return; // 【ラベル】行はタイムテーブルとして扱わない
+      let m = line.match(/^(\d{1,2}:\d{2})[-〜](\d{1,2}:\d{2})\s*(.*)$/);
+      if(m){
+        const row = blankRow();
+        row.start = m[1];
+        row.end = m[2];
+        let rest = m[3].trim();
+        const noteMatch = rest.match(/^(.*?)[\(（](.+?)[\)）]$/);
+        let name = rest;
+        if(noteMatch){ name = noteMatch[1].trim() || noteMatch[2].trim(); }
+        row.name = name;
+        const dur = timeToMinutes(m[2]) - timeToMinutes(m[1]);
+        if(!isNaN(dur) && dur > 0) row.duration = String(dur);
+        rows.push(row);
+        return;
+      }
+      m = line.match(/^(\d{1,2}:\d{2})\s*(.+)$/);
+      if(m && !/OPEN|START/i.test(line)){
+        const row = blankRow();
+        row.start = m[1];
+        row.name = m[2].trim();
+        rows.push(row);
+      }
+    });
+    if(rows.length) snap.rows = rows;
+
+    return snap;
+  }
+  document.getElementById('importTextBtn').addEventListener('click', ()=>{
+    const text = document.getElementById('f_importText').value;
+    const statusEl = document.getElementById('importTextStatus');
+    if(!text.trim()){
+      statusEl.textContent = 'テキストを貼り付けてください。';
+      statusEl.className = 'geo-status error';
+      return;
+    }
+    if(!confirm('現在の入力内容を上書きして読み込みます。よろしいですか？')) return;
+    try{
+      const parsed = parseImportedText(text);
+      applySnapshot(parsed);
+      const fields = [];
+      if(parsed.title) fields.push('タイトル');
+      if(parsed.date) fields.push('日程');
+      if(parsed.venueName) fields.push('会場');
+      if(parsed.openTime || parsed.startTime) fields.push('時間');
+      if(parsed.performers) fields.push(`出演者${parsed.performers.length}件`);
+      if(parsed.prices) fields.push(`価格${parsed.prices.length}件`);
+      if(parsed.rows) fields.push(`タイムテーブル${parsed.rows.length}行`);
+      statusEl.textContent = fields.length ? `読み込みました（${fields.join('、')}）。内容を必ず確認してください。` : '抽出できる項目が見つかりませんでした。テキストの形式をご確認ください。';
+      statusEl.className = fields.length ? 'geo-status success' : 'geo-status error';
+    }catch(err){
+      statusEl.textContent = '読み込みに失敗しました: ' + err.message;
+      statusEl.className = 'geo-status error';
+    }
+  });
 
   function applySnapshot(snap){
     document.getElementById('f_title').value = snap.title || '';
