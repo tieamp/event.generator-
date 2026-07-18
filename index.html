@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.7</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.8</span></h1>
   </div>
 </div>
 
@@ -686,11 +686,15 @@
     }
     return parts.join('　');
   }
-  function buildPriceDisplay(addYenPrefix){
+  function buildPriceDisplay(mode){
     const priceLines = state.prices.filter(p=>p.label || p.amount).map(p=>{
       let amountText = p.amount || '';
-      if(amountText && addYenPrefix){
-        amountText = '¥' + amountText.replace(/円$/, '').trim();
+      if(amountText){
+        if(mode === 'yenPrefix'){
+          amountText = '¥' + amountText.replace(/円$/, '').trim();
+        } else if(mode === 'yenSuffix'){
+          amountText = amountText.replace(/円$/, '').trim() + '円';
+        }
       }
       return [p.label, amountText].filter(Boolean).join(' ');
     });
@@ -2208,7 +2212,7 @@
     const timeDisplayShare = buildTimeDisplay();
     if(timeDisplayShare) lines.push(`時間：${timeDisplayShare}`);
 
-    const priceDisplayShare = buildPriceDisplay(true);
+    const priceDisplayShare = buildPriceDisplay('yenPrefix');
     if(priceDisplayShare) lines.push(`価格：${priceDisplayShare}`);
     const entryOrderShare = val('f_entryOrder');
     if(entryOrderShare) lines.push(`入場順：${entryOrderShare}`);
@@ -2683,7 +2687,7 @@
 
       const timeDisplayPdf = buildTimeDisplay();
       if(timeDisplayPdf) metaLines.push(`時間：${timeDisplayPdf}`);
-      const priceDisplayPdf = buildPriceDisplay();
+      const priceDisplayPdf = buildPriceDisplay('yenSuffix');
       if(priceDisplayPdf) metaLines.push(`価格：${priceDisplayPdf}`);
       const entryOrderPdf = val('f_entryOrder');
       if(entryOrderPdf) metaLines.push(`入場順：${entryOrderPdf}`);
