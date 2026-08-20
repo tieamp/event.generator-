@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v9.9</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v10.2</span></h1>
   </div>
 </div>
 
@@ -280,8 +280,8 @@
 
     <div class="field-group">
       <h2>📋 テキストから読み込む</h2>
-      <div class="hint">「【日程】」「【タイトル】」のような形式の概要テキストを貼り付けると、各項目・タイムテーブルを自動で読み取ります。あくまで簡易的な自動抽出のため、読み込み後は必ず内容を確認・修正してください。既存の入力内容は上書きされます。</div>
-      <textarea id="f_importText" style="min-height:140px;" placeholder="【日程】〇月〇日(〇)&#10;【タイトル】〇〇〇〇&#10;【会場】〇〇〇〇&#10;【時間】OPEN 〇〇:〇〇 START 〇〇:〇〇&#10;【出演】出演者A/出演者B/出演者C&#10;【価格】一般¥〇,〇〇〇 / 女性¥〇,〇〇〇&#10;〇〇:〇〇-〇〇:〇〇 出演者A(終演後物販)&#10;〇〇:〇〇-〇〇:〇〇 出演者B(終演後物販)"></textarea>
+      <div class="hint">「【日程】」「【タイトル】」のような形式の概要テキストを貼り付けると、各項目・タイムテーブルを自動で読み取ります。OPEN時間より前の枠は自動で「OPEN前」として振り分け、【告知解禁】【販売開始】【備考】なども判別します。あくまで簡易的な自動抽出のため、読み込み後は必ず内容を確認・修正してください。既存の入力内容は上書きされます。</div>
+      <textarea id="f_importText" style="min-height:140px;" placeholder="【日程】〇月〇日(〇)&#10;【タイトル】〇〇〇〇&#10;【会場】〇〇〇〇&#10;【時間】OPEN 〇〇:〇〇 START 〇〇:〇〇&#10;【出演】出演者A/出演者B/出演者C&#10;【価格】一般¥〇,〇〇〇 / 女性¥〇,〇〇〇&#10;【告知解禁】〇月〇日〇〇:〇〇&#10;【販売開始】〇月〇日〇〇:〇〇&#10;【備考】〇〇〇〇&#10;〇〇:〇〇-〇〇:〇〇 主催入り&#10;〇〇:〇〇-〇〇:〇〇 出演者A(終演後物販)&#10;〇〇:〇〇-〇〇:〇〇 出演者B(終演後物販)"></textarea>
       <button type="button" id="importTextBtn" class="add-row-btn">この内容で読み込む</button>
       <div class="geo-status" id="importTextStatus"></div>
     </div>
@@ -319,16 +319,6 @@
         <div class="field">
           <label>開演時間（第2部）</label>
           <input type="time" id="f_startTime2">
-        </div>
-      </div>
-      <div class="row2">
-        <div class="field">
-          <label>告知解禁</label>
-          <input type="datetime-local" id="f_announce">
-        </div>
-        <div class="field">
-          <label>販売開始</label>
-          <input type="datetime-local" id="f_sale">
         </div>
       </div>
     </div>
@@ -370,6 +360,16 @@
 
     <div class="field-group">
       <h2>チケットURL</h2>
+      <div class="row2">
+        <div class="field">
+          <label>告知解禁</label>
+          <input type="datetime-local" id="f_announce" step="900">
+        </div>
+        <div class="field">
+          <label>販売開始</label>
+          <input type="datetime-local" id="f_sale" step="900">
+        </div>
+      </div>
       <div id="ticketsList"></div>
       <button type="button" class="add-mini-btn" id="addTicketBtn">＋ チケットURLを追加</button>
       <div class="hint">2部制などURLが複数ある場合は「ラベル」に①②等を入力してください</div>
@@ -377,7 +377,7 @@
         <input type="checkbox" id="f_ticketSaleOption">
         チケット種別ごとに販売開始・終了日時を個別に設定する
       </label>
-      <div class="hint" id="ticketSaleOptionHint" style="display:none;">オンにすると、各チケットの「販売開始」「販売終了」を個別に設定できます。基本情報欄の「販売開始」は使われなくなります。</div>
+      <div class="hint" id="ticketSaleOptionHint" style="display:none;">オンにすると、各チケットの「販売開始」「販売終了」を個別に設定できます。上の共通「販売開始」は使われなくなります。</div>
     </div>
 
     <div class="field-group">
@@ -1138,11 +1138,11 @@
       <div class="list-row" style="margin-top:-4px;margin-bottom:10px;">
         <div class="field" style="margin-bottom:0;flex:1;">
           <label style="font-size:10.5px;">販売開始</label>
-          <input type="datetime-local" data-idx="${idx}" data-field="saleStart" class="ticket-input" value="${escapeAttr(t.saleStart || '')}">
+          <input type="datetime-local" data-idx="${idx}" data-field="saleStart" class="ticket-input" step="900" value="${escapeAttr(t.saleStart || '')}">
         </div>
         <div class="field" style="margin-bottom:0;flex:1;">
           <label style="font-size:10.5px;">販売終了</label>
-          <input type="datetime-local" data-idx="${idx}" data-field="saleEnd" class="ticket-input" value="${escapeAttr(t.saleEnd || '')}">
+          <input type="datetime-local" data-idx="${idx}" data-field="saleEnd" class="ticket-input" step="900" value="${escapeAttr(t.saleEnd || '')}">
         </div>
       </div>` : ''}`).join('');
     wrap.querySelectorAll('.ticket-input').forEach(inp=>{
@@ -1653,6 +1653,22 @@
   }
 
   // ---------- import from free-form text (best-effort parser) ----------
+  function parseMonthDayToISODate(text){
+    const dm = text.match(/(\d{1,2})月(\d{1,2})日/);
+    if(!dm) return null;
+    const now = new Date();
+    let year = now.getFullYear();
+    const month = parseInt(dm[1],10), day = parseInt(dm[2],10);
+    const candidate = new Date(year, month-1, day);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if(candidate < today) year++;
+    return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  }
+  function parseTimeHHMM(text){
+    const tm = text.match(/(\d{1,2}):(\d{2})/);
+    if(!tm) return null;
+    return `${tm[1].padStart(2,'0')}:${tm[2]}`;
+  }
   function parseImportedText(text){
     const snap = {};
     const lines = text.split('\n').map(l=>l.trim()).filter(l=>l);
@@ -1665,17 +1681,10 @@
     if(bracketMap['タイトル']) snap.title = bracketMap['タイトル'];
     if(bracketMap['会場']) snap.venueName = bracketMap['会場'];
 
-    if(bracketMap['日程']){
-      const dm = bracketMap['日程'].match(/(\d{1,2})月(\d{1,2})日/);
-      if(dm){
-        const now = new Date();
-        let year = now.getFullYear();
-        const month = parseInt(dm[1],10), day = parseInt(dm[2],10);
-        const candidate = new Date(year, month-1, day);
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        if(candidate < today) year++;
-        snap.date = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-      }
+    const dateSourceText = bracketMap['日程'] || bracketMap['開演日'] || '';
+    if(dateSourceText){
+      const iso = parseMonthDayToISODate(dateSourceText);
+      if(iso) snap.date = iso;
     }
 
     const timeSourceText = bracketMap['時間'] || text;
@@ -1683,6 +1692,22 @@
     const startM = timeSourceText.match(/START\s*(\d{1,2}):?(\d{2})/);
     if(openM) snap.openTime = `${openM[1].padStart(2,'0')}:${openM[2]}`;
     if(startM) snap.startTime = `${startM[1].padStart(2,'0')}:${startM[2]}`;
+
+    // 告知解禁・販売開始（日付+時刻を組み合わせてdatetime-local形式にする）
+    ['告知解禁', '販売開始'].forEach(label=>{
+      if(!bracketMap[label]) return;
+      const iso = parseMonthDayToISODate(bracketMap[label]) || snap.date;
+      const hm = parseTimeHHMM(bracketMap[label]);
+      if(iso && hm){
+        if(label === '告知解禁') snap.announce = `${iso}T${hm}`;
+        else snap.sale = `${iso}T${hm}`;
+      }
+    });
+
+    // 備考・注意事項・その他
+    const noteLabels = ['備考', '注意事項', 'その他', '概要'];
+    const noteTexts = noteLabels.map(l=>bracketMap[l]).filter(Boolean);
+    if(noteTexts.length) snap.overviewAll = noteTexts.join('\n');
 
     if(bracketMap['出演']){
       snap.performers = bracketMap['出演'].split('/').map(s=>s.trim()).filter(Boolean);
@@ -1695,12 +1720,15 @@
       }).filter(p=>p.label);
     }
 
-    const rows = [];
+    // タイムテーブル行を抽出し、OPEN時間より前のものは「OPEN前」の枠として振り分ける
+    const openMinForSplit = snap.openTime ? timeToMinutes(snap.openTime) : null;
+    const rows = [], preRows = [];
     lines.forEach(line=>{
       if(/^【/.test(line)) return; // 【ラベル】行はタイムテーブルとして扱わない
+      let row = null;
       let m = line.match(/^(\d{1,2}:\d{2})[-〜](\d{1,2}:\d{2})\s*(.*)$/);
       if(m){
-        const row = blankRow();
+        row = blankRow();
         row.start = m[1];
         row.end = m[2];
         let rest = m[3].trim();
@@ -1710,18 +1738,24 @@
         row.name = name;
         const dur = timeToMinutes(m[2]) - timeToMinutes(m[1]);
         if(!isNaN(dur) && dur > 0) row.duration = String(dur);
-        rows.push(row);
-        return;
+      } else {
+        m = line.match(/^(\d{1,2}:\d{2})\s*(.+)$/);
+        if(m && !/OPEN|START/i.test(line)){
+          row = blankRow();
+          row.start = m[1];
+          row.name = m[2].trim();
+        }
       }
-      m = line.match(/^(\d{1,2}:\d{2})\s*(.+)$/);
-      if(m && !/OPEN|START/i.test(line)){
-        const row = blankRow();
-        row.start = m[1];
-        row.name = m[2].trim();
+      if(!row) return;
+      const startMin = timeToMinutes(row.start);
+      if(openMinForSplit != null && startMin != null && startMin < openMinForSplit){
+        preRows.push(row);
+      } else {
         rows.push(row);
       }
     });
     if(rows.length) snap.rows = rows;
+    if(preRows.length) snap.preRows = preRows;
 
     return snap;
   }
@@ -1745,6 +1779,10 @@
       if(parsed.performers) fields.push(`出演者${parsed.performers.length}件`);
       if(parsed.prices) fields.push(`価格${parsed.prices.length}件`);
       if(parsed.rows) fields.push(`タイムテーブル${parsed.rows.length}行`);
+      if(parsed.preRows) fields.push(`OPEN前${parsed.preRows.length}行`);
+      if(parsed.announce) fields.push('告知解禁');
+      if(parsed.sale) fields.push('販売開始');
+      if(parsed.overviewAll) fields.push('備考・その他');
       statusEl.textContent = fields.length ? `読み込みました（${fields.join('、')}）。内容を必ず確認してください。` : '抽出できる項目が見つかりませんでした。テキストの形式をご確認ください。';
       statusEl.className = fields.length ? 'geo-status success' : 'geo-status error';
     }catch(err){
@@ -2556,8 +2594,8 @@
            (code >= 0x30A0 && code <= 0x30FF) || // カタカナ
            (code >= 0x4E00 && code <= 0x9FFF) || // 漢字
            (code >= 0xFF00 && code <= 0xFFEF) || // 全角英数・半角カナ
-           (code >= 0x2000 && code <= 0x27BF) || // 一般記号・矢印・数学記号・囲み文字(①②③)・記号(☆♡)・装飾記号(※含む)
-           (code >= 0x0000 && code <= 0x007F);   // ASCII基本ラテン
+           (code >= 0x2000 && code <= 0x27BF);   // 一般記号・矢印・数学記号・囲み文字(①②③)・記号(☆♡)・装飾記号(※含む)
+           // ASCII基本ラテン(URL・英数字)は英語フォント(latinFont)側で描画する
   }
   function splitFontRuns(text){
     const runs = [];
