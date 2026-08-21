@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v10.2</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v10.5</span></h1>
   </div>
 </div>
 
@@ -2594,8 +2594,8 @@
            (code >= 0x30A0 && code <= 0x30FF) || // カタカナ
            (code >= 0x4E00 && code <= 0x9FFF) || // 漢字
            (code >= 0xFF00 && code <= 0xFFEF) || // 全角英数・半角カナ
-           (code >= 0x2000 && code <= 0x27BF);   // 一般記号・矢印・数学記号・囲み文字(①②③)・記号(☆♡)・装飾記号(※含む)
-           // ASCII基本ラテン(URL・英数字)は英語フォント(latinFont)側で描画する
+           (code >= 0x2000 && code <= 0x27BF) || // 一般記号・矢印・数学記号・囲み文字(①②③)・記号(☆♡)・装飾記号(※含む)
+           (code >= 0x0000 && code <= 0x007F);   // ASCII基本ラテン(数字の文字化けを防ぐため、日本語フォント側に戻す)
   }
   function splitFontRuns(text){
     const runs = [];
@@ -2849,7 +2849,8 @@
         return String(r[c.key] || '');
       }));
 
-      const idealWidths = cols.map((c, i)=>{
+      // 第1段階：仮の文字サイズで幅を見積もり、拡大・縮小率を決める
+      const provisionalWidths = cols.map((c, i)=>{
         let w = measureMixed(c.label, headerFontSize) + CELL_PAD;
         rowCells.forEach(cells=>{
           const cw = measureMixed(cells[i], cellFontSize) + CELL_PAD;
@@ -2857,14 +2858,39 @@
         });
         return Math.max(w, MIN_COL_W);
       });
-      const idealTotal = idealWidths.reduce((a,b)=>a+b, 0);
-      const scale = contentW / idealTotal; // 余っていれば拡大、足りなければ縮小して必ずページ幅いっぱいに収める
-      const colWidths = idealWidths.map(w => w * scale);
-      const scaledCellFontSize = scale < 1 ? cellFontSize * Math.max(scale, 0.7) : Math.min(cellFontSize * scale, cellFontSize * 1.35);
-      const scaledHeaderFontSize = scale < 1 ? headerFontSize * Math.max(scale, 0.7) : Math.min(headerFontSize * scale, headerFontSize * 1.35);
+      const provisionalTotal = provisionalWidths.reduce((a,b)=>a+b, 0);
+      const rawScale = contentW / provisionalTotal;
+      let scaledCellFontSize = rawScale < 1 ? cellFontSize * Math.max(rawScale, 0.7) : Math.min(cellFontSize * rawScale, cellFontSize * 1.35);
+      let scaledHeaderFontSize = rawScale < 1 ? headerFontSize * Math.max(rawScale, 0.7) : Math.min(headerFontSize * rawScale, headerFontSize * 1.35);
 
-      const heightScale = Math.max(1, scaledCellFontSize / cellFontSize);
-      const rowH = 16 * heightScale, headerH = 18 * heightScale;
+      // 第2段階：実際に描画する文字サイズで幅を測り直し、そのサイズを基準に列幅を配分する(描画サイズと列幅の矛盾を防ぐ)
+      const idealWidths = cols.map((c, i)=>{
+        let w = measureMixed(c.label, scaledHeaderFontSize) + CELL_PAD;
+        rowCells.forEach(cells=>{
+          const cw = measureMixed(cells[i], scaledCellFontSize) + CELL_PAD;
+          if(cw > w) w = cw;
+        });
+        return Math.max(w, MIN_COL_W);
+      });
+      const idealTotal = idealWidths.reduce((a,b)=>a+b, 0);
+      const finalScale = contentW / idealTotal;
+      const colWidths = idealWidths.map(w => w * finalScale);
+
+      let heightScale = Math.max(1, scaledCellFontSize / cellFontSize);
+      let rowH = 16 * heightScale, headerH = 18 * heightScale;
+
+      // タイムテーブル全体を可能な限り1ページに収めるため、残り高さに対して行数が多すぎる場合はさらに縮小する
+      // (文字が小さくなりすぎないよう下限を設け、それでも収まらない場合は通常通り複数ページに分割する)
+      const availableTimetableHeight = curY - MARGIN;
+      const naturalTotalHeight = headerH + rowH * rowCells.length;
+      if(rowCells.length > 0 && naturalTotalHeight > availableTimetableHeight){
+        const fitScale = Math.max(availableTimetableHeight / naturalTotalHeight, 0.4);
+        scaledCellFontSize *= fitScale;
+        scaledHeaderFontSize *= fitScale;
+        rowH *= fitScale;
+        headerH *= fitScale;
+      }
+
       const measureAtSize = (t, s) => measureMixed(t, s);
 
       function drawColumnDividers(topY, height, color){
