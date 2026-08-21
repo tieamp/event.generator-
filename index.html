@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v10.7</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v10.9</span></h1>
   </div>
 </div>
 
@@ -887,8 +887,8 @@
           <option value="before" ${c.type==='before'?'selected':''}>〇時以前の出演</option>
           <option value="between" ${c.type==='between'?'selected':''}>〇時以降〜〇時以前の出演</option>
         </select>
-        ${c.type!=='before' ? `<input type="time" data-idx="${idx}" data-field="after" class="performer-time-input" value="${escapeAttr(c.after||'')}">` : ''}
-        ${c.type!=='after' ? `<input type="time" data-idx="${idx}" data-field="before" class="performer-time-input" value="${escapeAttr(c.before||'')}">` : ''}
+        ${c.type!=='before' ? `<input type="time" data-idx="${idx}" data-field="after" class="performer-time-input" step="300" value="${escapeAttr(c.after||'')}">` : ''}
+        ${c.type!=='after' ? `<input type="time" data-idx="${idx}" data-field="before" class="performer-time-input" step="300" value="${escapeAttr(c.before||'')}">` : ''}
         <button type="button" class="icon-btn danger" data-act="clearTime" data-idx="${idx}" title="時間指定を解除">✕</button>
       </div>`;
       }
@@ -2941,15 +2941,21 @@
       const pdfBytes = await pdfDoc.save();
       const blob = new Blob([pdfBytes], {type:'application/pdf'});
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
       const title = val('f_title') || '概要書';
       const dateStr = document.getElementById('f_date').value;
-      a.download = dateStr ? `${dateStr}_${title}.pdf` : `${title}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const filename = dateStr ? `${dateStr}_${title}.pdf` : `${title}.pdf`;
+      // 新しいタブでPDFを開く（元のタブ・画面はそのまま残るので、タブを閉じる/切り替えるだけで戻れる）
+      const newTab = window.open(url, '_blank');
+      if(!newTab){
+        // ポップアップがブロックされた場合の保険として、通常のダウンロード方式にフォールバック
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      setTimeout(()=> URL.revokeObjectURL(url), 60000);
     }catch(err){
       alert('PDFの生成に失敗しました: ' + err.message);
     }finally{
