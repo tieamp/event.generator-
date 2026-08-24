@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.0</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.1</span></h1>
   </div>
 </div>
 
@@ -2591,12 +2591,13 @@
   const LATIN_ONLY_PUNCTUATION = ['(', ')', '-'];
   function isJapaneseSafeCode(code, ch){
     if(ch && LATIN_ONLY_PUNCTUATION.includes(ch)) return false; // カッコ・ダッシュは英語フォント側の間隔の方が自然なため除外
+    if(ch && Object.prototype.hasOwnProperty.call(LATIN_FALLBACK_MAP, ch)) return false; // 代替文字が定義済みの記号(☆★♪矢印等)は、日本語フォントでの対応が不確実なため必ず代替文字を使う
     return (code >= 0x3000 && code <= 0x303F) || // 日本語記号・句読点
            (code >= 0x3040 && code <= 0x309F) || // ひらがな
            (code >= 0x30A0 && code <= 0x30FF) || // カタカナ
            (code >= 0x4E00 && code <= 0x9FFF) || // 漢字
            (code >= 0xFF00 && code <= 0xFFEF) || // 全角英数・半角カナ
-           (code >= 0x2000 && code <= 0x27BF) || // 一般記号・矢印・数学記号・囲み文字(①②③)・記号(☆♡)・装飾記号(※含む)
+           (code >= 0x2000 && code <= 0x27BF) || // 一般記号・矢印・数学記号・囲み文字(①②③)・記号・装飾記号(※含む)
            (code >= 0x0000 && code <= 0x007F);   // ASCII基本ラテン(数字の文字化けを防ぐため、日本語フォント側に戻す)
   }
   function splitFontRuns(text){
