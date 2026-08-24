@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v10.9</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.0</span></h1>
   </div>
 </div>
 
@@ -2588,7 +2588,9 @@
       document.head.appendChild(s);
     });
   }
-  function isJapaneseSafeCode(code){
+  const LATIN_ONLY_PUNCTUATION = ['(', ')', '-'];
+  function isJapaneseSafeCode(code, ch){
+    if(ch && LATIN_ONLY_PUNCTUATION.includes(ch)) return false; // カッコ・ダッシュは英語フォント側の間隔の方が自然なため除外
     return (code >= 0x3000 && code <= 0x303F) || // 日本語記号・句読点
            (code >= 0x3040 && code <= 0x309F) || // ひらがな
            (code >= 0x30A0 && code <= 0x30FF) || // カタカナ
@@ -2602,7 +2604,7 @@
     let cur = '', curIsJp = null;
     for(const ch of String(text)){
       const code = ch.codePointAt(0);
-      const jp = isJapaneseSafeCode(code);
+      const jp = isJapaneseSafeCode(code, ch);
       if(curIsJp === null){ curIsJp = jp; cur = ch; }
       else if(jp === curIsJp){ cur += ch; }
       else { runs.push({text:cur, jp:curIsJp}); cur = ch; curIsJp = jp; }
@@ -2944,17 +2946,12 @@
       const title = val('f_title') || '概要書';
       const dateStr = document.getElementById('f_date').value;
       const filename = dateStr ? `${dateStr}_${title}.pdf` : `${title}.pdf`;
-      // 新しいタブでPDFを開く（元のタブ・画面はそのまま残るので、タブを閉じる/切り替えるだけで戻れる）
-      const newTab = window.open(url, '_blank');
-      if(!newTab){
-        // ポップアップがブロックされた場合の保険として、通常のダウンロード方式にフォールバック
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       setTimeout(()=> URL.revokeObjectURL(url), 60000);
     }catch(err){
       alert('PDFの生成に失敗しました: ' + err.message);
