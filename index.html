@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.1</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.2</span></h1>
   </div>
 </div>
 
@@ -2614,7 +2614,7 @@
     return runs;
   }
   // Helvetica(WinAnsi)がカバーしない文字(ギリシャ文字など)の最終手段の代替
-  const LATIN_FALLBACK_MAP = {'Λ':'A','λ':'a','Ω':'O','ω':'o','Σ':'S','σ':'s','Π':'P','π':'p','Δ':'D','δ':'d','Ψ':'Y','β':'b','Φ':'F','φ':'f','→':'->','←':'<-','⇒':'=>','⇐':'<=','↑':'^','↓':'v','★':'*','☆':'*','♪':'*','−':'-','‐':'-'};
+  const LATIN_FALLBACK_MAP = {'Λ':'A','λ':'a','Ω':'O','ω':'o','Σ':'S','σ':'s','Π':'P','π':'p','Δ':'D','δ':'d','Ψ':'Y','β':'b','Φ':'F','φ':'f','→':'->','←':'<-','⇒':'=>','⇐':'<=','↑':'^','↓':'v','♪':'*','−':'-','‐':'-'};
   function sanitizeLatinRun(text){
     let out = '';
     for(const ch of text){ out += LATIN_FALLBACK_MAP[ch] || ch; }
