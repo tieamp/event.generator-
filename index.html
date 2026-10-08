@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.4</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.5</span></h1>
   </div>
 </div>
 
@@ -2257,15 +2257,18 @@
 
     const greetingType = document.getElementById('f_greetingType').value;
 
-    const announceJP = formatDateTimeShortJP(val('f_announce'));
-    if(announceJP && greetingType === 'announce') lines.push(`告知解禁：${announceJP}`);
-
-    const ticketSaleOptionOn = document.getElementById('f_ticketSaleOption').checked;
-    if(greetingType !== 'invite' && !ticketSaleOptionOn){
-      const saleRaw = val('f_sale');
-      if(saleRaw){
-        const isSalePast = new Date(saleRaw) <= new Date();
-        lines.push(`販売開始：${isSalePast ? '販売中' : formatDateTimeShortJP(saleRaw)}`);
+    const announceRawS = val('f_announce');
+    let saleRawS = val('f_sale');
+    if(!saleRawS){
+      const starts = state.tickets.map(t=>t.saleStart).filter(Boolean).sort();
+      if(starts.length) saleRawS = starts[0];
+    }
+    if(announceRawS || saleRawS){
+      lines.push('');
+      if(announceRawS) lines.push(`告知解禁日時：${formatDateTimeShortJP(announceRawS)}`);
+      if(saleRawS){
+        const isSalePast = new Date(saleRawS) <= new Date();
+        lines.push(`販売開始日時：${isSalePast ? '販売中' : formatDateTimeShortJP(saleRawS)}`);
       }
     }
 
