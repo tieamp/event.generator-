@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.5</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.6</span></h1>
   </div>
 </div>
 
@@ -1671,88 +1671,230 @@
   }
   function parseImportedText(text){
     const snap = {};
-    const lines = text.split('\n').map(l=>l.trim()).filter(l=>l);
-    const bracketMap = {};
-    lines.forEach(line=>{
-      const m = line.match(/^【(.+?)】\s*(.*)$/);
-      if(m) bracketMap[m[1]] = m[2].trim();
+    // ---- 正規化 ----
+    const norm = text
+      .replace(/[０-９]/g, c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+      .replace(/(\d)\s*[：]\s*(\d)/g, '$1:$2')
+      .replace(/(\d{1,2}:\d{2})\s*[～〜~ー－―–—\-]\s*(\d{1,2}:\d{2})/g, '$1~$2')
+      .replace(/\r/g, '');
+    const rawLines = norm.split('\n').map(l=>l.trim());
+
+    // ---- セクション分割 ----
+    // 見出し: 【xx】 [xx] ［xx］ （行頭）。見出しの後ろに値があればその値も拾う
+    const sections = [];   // {name, inline, body:[]}
+    let cur = {name:'', inline:'', body:[]};
+    sections.push(cur);
+    rawLines.forEach(line=>{
+      if(!line) { cur.body.push(''); return; }
+      if(/^[ー\-–—_=━─]{5,}$/.test(line)) return; // 区切り線
+      const m = line.match(/^[【\[［](.+?)[】\]］]\s*(.*)$/);
+      if(m){
+        cur = {name:m[1].trim(), inline:m[2].trim(), body:[]};
+        sections.push(cur);
+        return;
+      }
+      cur.body.push(line);
     });
 
-    if(bracketMap['タイトル']) snap.title = bracketMap['タイトル'];
-    if(bracketMap['会場']) snap.venueName = bracketMap['会場'];
+    // ---- キー: 値 形式の行を収集 ----
+    const KEY_ALIASES = {
+      title:['イベント名','タイトル','公演名','イベントタイトル'],
+      venue:['場所','会場','開催場所','会場名'],
+      date:['日程','開催日','開演日','日時','日付'],
+      time:['時間','開場開演','開場/開演'],
+      price:['料金','価格','チケット代','チケット料金','入場料'],
+      url:['URL','ＵＲＬ','チケットURL','チケット','予約','予約URL'],
+      performers:['出演','出演者','出演アーティスト'],
+      entryOrder:['入場順','入場順番'],
+      announce:['告知解禁','告知解禁日','告知解禁日時','告知日'],
+      sale:['販売開始','販売開始日','販売開始日時','チケット販売日','チケット販売','チケット発売日','発売日','販売日']
+    };
+    function keyOf(label){
+      for(const k in KEY_ALIASES) if(KEY_ALIASES[k].includes(label)) return k;
+      return null;
+    }
+    const kv = {};          // key -> value(last wins unless already set)
+    const noteLines = [];   // 概要欄へ入れる行
+    const scheduleLines = [];
+    const SCHEDULE_NAMES = ['タイムスケジュール','タイムテーブル','スケジュール','タイム','進行'];
+    const OVERVIEW_ONLY = ['備考','注意事項','その他','概要','イベント内容','内容','注意','補足'];
 
-    const dateSourceText = bracketMap['日程'] || bracketMap['開演日'] || '';
-    if(dateSourceText){
-      const iso = parseMonthDayToISODate(dateSourceText);
+    function setKV(k, v){ if(v && !kv[k]) kv[k] = v.trim(); }
+
+    sections.forEach(sec=>{
+      const key = keyOf(sec.name);
+      if(key){
+        // 【日程】10月30日 / [告知解禁日]\n10月17日 20時
+        const val = sec.inline || sec.body.find(l=>l) || '';
+        setKV(key, val);
+        // 見出しがキーの場合、残りの本文は無視（値行のみ）
+        return;
+      }
+      if(SCHEDULE_NAMES.some(n=>sec.name.includes(n))){
+        if(sec.inline) scheduleLines.push(sec.inline);
+        sec.body.forEach(l=>{ if(l) scheduleLines.push(l); });
+        return;
+      }
+      const isGeneralOverviewHeader = /イベント概要|開催概要|公演概要/.test(sec.name);
+      const isOverviewOnly = !isGeneralOverviewHeader && OVERVIEW_ONLY.some(n=>sec.name === n || sec.name.includes(n));
+      const body = [];
+      if(sec.inline) body.push(sec.inline);
+      sec.body.forEach(l=>body.push(l));
+      const kept = [];
+      body.forEach(l=>{
+        if(!l) { kept.push(''); return; }
+        if(/^\d{1,2}:\d{2}(\s*~\s*\d{1,2}:\d{2})?\s*\S/.test(l) && !/^\d{1,2}:\d{2}\s*(OPEN|START)/i.test(l)){ scheduleLines.push(l); return; }
+        if(!isOverviewOnly){
+          const m = l.match(/^([^:：]{1,12})[:：]\s*(.*)$/);
+          if(m){
+            const k = keyOf(m[1].trim());
+            if(k){ setKV(k, m[2]); return; }
+          }
+          // ラベル無しで日付や時間だけの行は無視せず概要へ
+        }
+        kept.push(l);
+      });
+      // 先頭セクション(見出し無し)や概要見出しの残り行
+      const keptClean = kept.filter((l,i,a)=> l || (i>0 && a[i-1]));
+      if(keptClean.some(Boolean)){
+        if(isGeneralOverviewHeader || sec.name === '' || sec.name === '備考'){
+          noteLines.push(...keptClean.filter(Boolean));
+          noteLines.push('');
+        } else {
+          noteLines.push(`【${sec.name}】`);
+          noteLines.push(...keptClean);
+          noteLines.push('');
+        }
+      }
+    });
+    // 見出しなし本文に 「キー：値」 が含まれる場合も上のロジックで拾われる(!isOverviewOnly)
+
+    // ---- 基本項目 ----
+    if(kv.title) snap.title = kv.title;
+    if(kv.venue) snap.venueName = kv.venue;
+    if(kv.entryOrder) snap.entryOrder = kv.entryOrder;
+    if(kv.date){
+      const iso = parseMonthDayToISODate(kv.date);
       if(iso) snap.date = iso;
     }
-
-    const timeSourceText = bracketMap['時間'] || text;
-    const openM = timeSourceText.match(/OPEN\s*(\d{1,2}):?(\d{2})/);
-    const startM = timeSourceText.match(/START\s*(\d{1,2}):?(\d{2})/);
+    const timeSrc = kv.time || norm;
+    const openM = timeSrc.match(/(?:OPEN|OP|開場)\s*[:：]?\s*(\d{1,2}):?(\d{2})/i);
+    const startM = timeSrc.match(/(?:START|ST|開演)\s*[:：]?\s*(\d{1,2}):?(\d{2})/i);
     if(openM) snap.openTime = `${openM[1].padStart(2,'0')}:${openM[2]}`;
     if(startM) snap.startTime = `${startM[1].padStart(2,'0')}:${startM[2]}`;
 
-    // 告知解禁・販売開始（日付+時刻を組み合わせてdatetime-local形式にする）
-    ['告知解禁', '販売開始'].forEach(label=>{
-      if(!bracketMap[label]) return;
-      const iso = parseMonthDayToISODate(bracketMap[label]) || snap.date;
-      const hm = parseTimeHHMM(bracketMap[label]);
-      if(iso && hm){
-        if(label === '告知解禁') snap.announce = `${iso}T${hm}`;
-        else snap.sale = `${iso}T${hm}`;
+    // ---- 告知解禁・販売開始 ----
+    function parseDateTimeFlex(str){
+      if(!str) return null;
+      const md = str.match(/(\d{1,2})月\s*(\d{1,2})日/) || str.match(/(\d{1,2})\/(\d{1,2})/);
+      if(!md) return null;
+      const mo = parseInt(md[1],10), da = parseInt(md[2],10);
+      let hh = null, mm = 0;
+      const t1 = str.match(/(\d{1,2}):(\d{2})/);
+      const t2 = str.match(/(\d{1,2})時\s*(?:(\d{1,2})分)?/);
+      if(t1){ hh = parseInt(t1[1],10); mm = parseInt(t1[2],10); }
+      else if(t2){ hh = parseInt(t2[1],10); mm = t2[2] ? parseInt(t2[2],10) : 0; }
+      if(hh == null) return null;
+      mm = Math.round(mm/15)*15;
+      if(mm === 60){ mm = 0; hh += 1; }
+      // 年はイベント日に合わせる(イベント日より後になる場合は前年)
+      const now = new Date();
+      let year = snap.date ? parseInt(snap.date.slice(0,4),10) : now.getFullYear();
+      if(snap.date){
+        const ev = new Date(snap.date+'T23:59:59');
+        if(new Date(year, mo-1, da, hh, mm) > ev) year -= 1;
+      } else if(new Date(year, mo-1, da, hh, mm) < new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+        year += 1;
       }
+      return `${year}-${String(mo).padStart(2,'0')}-${String(da).padStart(2,'0')}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+    }
+    const ann = parseDateTimeFlex(kv.announce); if(ann) snap.announce = ann;
+    const sal = parseDateTimeFlex(kv.sale); if(sal) snap.sale = sal;
+
+    // ---- 出演者 ----
+    if(kv.performers){
+      snap.performers = kv.performers.split(/[\/、,，]/).map(s=>s.trim()).filter(Boolean);
+    }
+
+    // ---- 料金 ----
+    const priceNoteText = noteLines.join('\n') + '\n' + (kv.price || '');
+    if(kv.price){
+      let priceStr = kv.price;
+      const prices = [];
+      const plus = priceStr.match(/当日\s*[＋+]\s*([0-9][0-9,]*)\s*円?/);
+      priceStr = priceStr.replace(/[\(（][^\)）]*[\)）]/g, ' ');
+      priceStr.split(/[\/、，]|\s{2,}/).forEach(part=>{
+        const pm = part.trim().match(/^(.*?)[\s　]*[¥￥]?\s*([0-9][0-9,]*)\s*円?\s*$/);
+        if(pm && pm[2]){
+          prices.push({label: pm[1].trim(), amount: formatNumberComma(pm[2])});
+        } else if(part.trim()){
+          prices.push({label: part.trim(), amount: ''});
+        }
+      });
+      if(plus && prices.length){
+        const base = parseInt(prices[0].amount.replace(/,/g,''),10);
+        const add = parseInt(plus[1].replace(/,/g,''),10);
+        if(!isNaN(base) && !isNaN(add) && !prices.some(p=>p.label === '当日')){
+          prices.push({label:'当日', amount: formatNumberComma(String(base+add))});
+        }
+      }
+      if(prices.length) snap.prices = prices;
+    }
+    // ドリンク代の扱い（代込み → チェックなし / 別・別途 → チェックあり）
+    if(/(ドリンク代|1ドリンク|ワンドリンク|D代)[^\n。]*(込|含)/.test(priceNoteText)) snap.oneDrink = false;
+    else if(/(ドリンク代|ドリンク|D代)[^\n。]*(別|必要)/.test(priceNoteText)) snap.oneDrink = true;
+    else snap.oneDrink = true;
+
+    // ---- チケットURL ----
+    if(kv.url){
+      const um = kv.url.match(/https?:\/\/\S+/);
+      if(um) snap.tickets = [{label:'チケット', url: um[0], saleStart:'', saleEnd:''}];
+    }
+
+    // ---- 概要・注意事項・その他 ----
+    const normBullet = l=> l.replace(/^[\-\*・●•]\s*/, '・');
+    const overview = [];
+    noteLines.forEach(l=>{
+      if(!l){ if(overview.length && overview[overview.length-1] !== '') overview.push(''); return; }
+      overview.push(/^【.+】$/.test(l) ? l : normBullet(l));
     });
+    while(overview.length && overview[overview.length-1] === '') overview.pop();
+    if(overview.length) snap.overviewAll = overview.join('\n');
 
-    // 備考・注意事項・その他
-    const noteLabels = ['備考', '注意事項', 'その他', '概要'];
-    const noteTexts = noteLabels.map(l=>bracketMap[l]).filter(Boolean);
-    if(noteTexts.length) snap.overviewAll = noteTexts.join('\n');
-
-    if(bracketMap['出演']){
-      snap.performers = bracketMap['出演'].split('/').map(s=>s.trim()).filter(Boolean);
-    }
-
-    if(bracketMap['価格']){
-      snap.prices = bracketMap['価格'].split('/').map(part=>{
-        const pm = part.trim().match(/^(.+?)[\s　]*[¥￥]?([0-9][0-9,]*)\s*円?$/);
-        return pm ? {label: pm[1].trim(), amount: formatNumberComma(pm[2])} : {label: part.trim(), amount:''};
-      }).filter(p=>p.label);
-    }
-
-    // タイムテーブル行を抽出し、OPEN時間より前のものは「OPEN前」の枠として振り分ける
+    // ---- タイムテーブル ----
+    const allLines = scheduleLines.length ? scheduleLines : norm.split('\n').map(l=>l.trim()).filter(l=>l && !/^[【\[［]/.test(l) && !/[:：]\s*(https?:)?\/\//.test(l));
     const openMinForSplit = snap.openTime ? timeToMinutes(snap.openTime) : null;
     const rows = [], preRows = [];
-    lines.forEach(line=>{
-      if(/^【/.test(line)) return; // 【ラベル】行はタイムテーブルとして扱わない
+    allLines.forEach(line=>{
+      if(/^[【\[［]/.test(line)) return;
       let row = null;
-      let m = line.match(/^(\d{1,2}:\d{2})[-〜](\d{1,2}:\d{2})\s*(.*)$/);
+      let m = line.match(/^(\d{1,2}:\d{2})\s*[~\-]\s*(\d{1,2}:\d{2})\s*(.*)$/);
       if(m){
         row = blankRow();
-        row.start = m[1];
-        row.end = m[2];
-        let rest = m[3].trim();
+        row.start = m[1].padStart(5,'0');
+        row.end = m[2].padStart(5,'0');
+        const rest = m[3].trim();
         const noteMatch = rest.match(/^(.*?)[\(（](.+?)[\)）]$/);
         let name = rest;
-        if(noteMatch){ name = noteMatch[1].trim() || noteMatch[2].trim(); }
+        if(noteMatch){
+          name = noteMatch[1].trim() || noteMatch[2].trim();
+          if(noteMatch[1].trim() && !/物販/.test(noteMatch[2])) row.note = noteMatch[2].trim();
+        }
         row.name = name;
-        const dur = timeToMinutes(m[2]) - timeToMinutes(m[1]);
+        const dur = timeToMinutes(row.end) - timeToMinutes(row.start);
         if(!isNaN(dur) && dur > 0) row.duration = String(dur);
       } else {
         m = line.match(/^(\d{1,2}:\d{2})\s*(.+)$/);
         if(m && !/OPEN|START/i.test(line)){
           row = blankRow();
-          row.start = m[1];
+          row.start = m[1].padStart(5,'0');
           row.name = m[2].trim();
         }
       }
       if(!row) return;
       const startMin = timeToMinutes(row.start);
-      if(openMinForSplit != null && startMin != null && startMin < openMinForSplit){
-        preRows.push(row);
-      } else {
-        rows.push(row);
-      }
+      if(openMinForSplit != null && startMin != null && startMin < openMinForSplit) preRows.push(row);
+      else rows.push(row);
     });
     if(rows.length) snap.rows = rows;
     if(preRows.length) snap.preRows = preRows;
