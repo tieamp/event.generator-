@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.6</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.7</span></h1>
   </div>
 </div>
 
@@ -711,6 +711,7 @@
   function buildTicketLines(){
     const saleOptionOn = document.getElementById('f_ticketSaleOption').checked;
     return state.tickets.filter(t=>t.url).map(t=>{
+      if(!/^https?:\/\//i.test(t.url.trim()) && /^[\w-]+(\.[\w-]+)+(\/|$)/.test(t.url.trim())) t.url = 'https://' + t.url.trim();
       let line = `${t.label ? t.label+' ' : ''}${t.url}`;
       if(saleOptionOn && (t.saleStart || t.saleEnd)){
         const startText = t.saleStart ? formatDateTimeShortJP(t.saleStart) : '';
@@ -2271,7 +2272,7 @@
     const entryOrder = val('f_entryOrder');
     if(entryOrder) meta.push(['入場順', entryOrder]);
 
-    const ticketLines = buildTicketLines().map(l=> escapeHtml(l));
+    const ticketLines = buildTicketLines().map(l=> linkify(l));
     if(ticketLines.length) meta.push(['チケット', ticketLines.join('\n'), true]);
 
     const announceJP = formatDateTimeShortJP(val('f_announce'));
