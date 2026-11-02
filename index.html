@@ -251,7 +251,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="brand-eyebrow">EVENT PRODUCTION TOOL</span>
-    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.7</span></h1>
+    <h1>イベント制作 ジェネレーター<span class="version-badge">v11.8</span></h1>
   </div>
 </div>
 
@@ -798,12 +798,16 @@
     const after = parseInt(row.dressingAfterMin, 10);
     if(startMin != null && !isNaN(before)){
       row.dressingIn = minutesToTime(startMin - before);
+    } else if(String(row.dressingBeforeMin || '').trim() === ''){
+      row.dressingIn = ''; // 入り時間(何分前)を消したら、計算済みの入り時間も消す
     }
     // 退室時間は「物販終了後」が基準。物販が設定されていない行は出演終了時間を代わりに使う。
     const meetEndMin = timeToMinutes(row.meetEnd);
     const outBaseMin = meetEndMin != null ? meetEndMin : endMin;
     if(outBaseMin != null && !isNaN(after)){
       row.dressingOut = minutesToTime(outBaseMin + after);
+    } else if(String(row.dressingAfterMin || '').trim() === ''){
+      row.dressingOut = ''; // 退室(何分後)を消したら、計算済みの退室時間も消す
     }
   }
   function composeDressing(row){
@@ -2743,6 +2747,8 @@
            (code >= 0x30A0 && code <= 0x30FF) || // カタカナ
            (code >= 0x4E00 && code <= 0x9FFF) || // 漢字
            (code >= 0xFF00 && code <= 0xFFEF) || // 全角英数・半角カナ
+           (code >= 0x0370 && code <= 0x03FF) || // ギリシャ文字(α等)は日本語フォント側で描画
+           (code >= 0x2200 && code <= 0x22FF) || // 数学記号(∞等)
            (code >= 0x2000 && code <= 0x27BF) || // 一般記号・矢印・数学記号・囲み文字(①②③)・記号・装飾記号(※含む)
            (code >= 0x0000 && code <= 0x007F);   // ASCII基本ラテン(数字の文字化けを防ぐため、日本語フォント側に戻す)
   }
@@ -2923,7 +2929,7 @@
         const prefix = 'チケット：' + (t.label ? `${t.label}: ` : '');
         drawMixedText(prefix, MARGIN, curY - 10, 9);
         const prefixW = measureMixed(prefix, 9);
-        drawMixedText(t.url, MARGIN + prefixW, curY - 10, 9, rgb(0.16,0.4,0.55));
+        drawMixedText(t.url, MARGIN + prefixW, curY - 10, 9, rgb(0.05,0.28,0.85));
         const urlW = measureMixed(t.url, 9);
         addLink(MARGIN + prefixW, curY - 12, urlW, 13, t.url);
         if(ticketSaleOptionOnPdf && (t.saleStart || t.saleEnd)){
@@ -2956,11 +2962,27 @@
         const OV_PAD = 8, OV_BODY_SIZE = 8.5, OV_LINE_H = 13, OV_HEADING_H = 18;
         const wrappedItems = [];
         overviewLines.forEach(line=>{
-          const urlMatch = line.match(/^(https?:\/\/\S+)$/);
           const text = '・' + line;
+          const ranges = [];
+          const reUrl = /https?:\/\/[^\s　]+/g;
+          let um;
+          while((um = reUrl.exec(text)) !== null) ranges.push({s: um.index, e: um.index + um[0].length, url: um[0]});
           const wrapped = wrapByChar(text, contentW - OV_PAD*2, OV_BODY_SIZE);
-          wrapped.forEach((wline, i)=>{
-            wrappedItems.push({text: wline, url: (urlMatch && i===0) ? urlMatch[1] : null});
+          let offset = 0;
+          wrapped.forEach(wline=>{
+            const lineS = offset, lineE = offset + wline.length;
+            const segments = [];
+            let pos = lineS;
+            ranges.forEach(r=>{
+              const a = Math.max(r.s, lineS), b = Math.min(r.e, lineE);
+              if(a >= b) return;
+              if(a > pos) segments.push({text: text.slice(pos, a), url: null});
+              segments.push({text: text.slice(a, b), url: r.url});
+              pos = b;
+            });
+            if(pos < lineE) segments.push({text: text.slice(pos, lineE), url: null});
+            wrappedItems.push({segments});
+            offset = lineE;
           });
         });
         const boxHeight = OV_PAD*2 + OV_HEADING_H + wrappedItems.length * OV_LINE_H;
@@ -2971,11 +2993,14 @@
         drawMixedText('概要・注意事項・その他', MARGIN + OV_PAD, curY - 9, 10);
         curY -= OV_HEADING_H;
         wrappedItems.forEach(item=>{
-          drawMixedText(item.text, MARGIN + OV_PAD, curY - 9, OV_BODY_SIZE, item.url ? rgb(0.16,0.4,0.55) : undefined);
-          if(item.url){
-            const w = measureMixed(item.text, OV_BODY_SIZE);
-            addLink(MARGIN + OV_PAD, curY - 11, w, 12, item.url);
-          }
+          let segX = MARGIN + OV_PAD;
+          item.segments.forEach(seg=>{
+            if(!seg.text) return;
+            drawMixedText(seg.text, segX, curY - 9, OV_BODY_SIZE, seg.url ? rgb(0.05,0.28,0.85) : undefined);
+            const w = measureMixed(seg.text, OV_BODY_SIZE);
+            if(seg.url) addLink(segX, curY - 11, w, 12, seg.url);
+            segX += w;
+          });
           curY -= OV_LINE_H;
         });
         curY -= OV_PAD;
